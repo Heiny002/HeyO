@@ -1,0 +1,98 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Poppins:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: theme('colors.background');
+  color: #333;
+  min-height: 100vh;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Nunito', sans-serif;
+  font-weight: 700;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* Custom Classes */
+@layer components {
+  .btn {
+    @apply px-6 py-3 rounded-full font-bold transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-opacity-50 text-white;
+  }
+  
+  .btn-primary {
+    @apply btn bg-primary hover:bg-primary-dark focus:ring-primary;
+  }
+  
+  .btn-secondary {
+    @apply btn bg-secondary hover:bg-secondary-dark focus:ring-secondary;
+  }
+  
+  .btn-accent {
+    @apply btn bg-accent hover:bg-accent-dark focus:ring-accent;
+  }
+  
+  .input-field {
+    @apply w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-300;
+  }
+  
+  .card {
+    @apply bg-white rounded-2xl shadow-lg p-6 transition-all duration-300 hover:shadow-xl;
+  }
+  
+  .page-container {
+    @apply container mx-auto px-4 py-8 sm:px-6 md:px-8 min-h-screen;
+  }
+  
+  .form-container {
+    @apply max-w-md mx-auto bg-white p-8 rounded-2xl shadow-lg;
+  }
+  
+  .logo-text {
+    @apply font-heading font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-primary via-secondary to-accent;
+  }
+  
+  .animate-float {
+    animation: float 3s ease-in-out infinite;
+  }
+  
+  /* Game-specific styles */
+  .game-card {
+    @apply card flex flex-col items-center justify-center p-6 cursor-pointer transform transition-all duration-300 hover:scale-105;
+  }
+}
+
+/* Colorful animations */
+.bg-gradient-animated {
+  background: linear-gradient(-45deg, #FF5C5C, #5CE1FF, #FFBB5C, #FF9D9D);
+  background-size: 400% 400%;
+  animation: gradient 15s ease infinite;
+}
+
+@keyframes gradient {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.text-shadow {
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+} 
