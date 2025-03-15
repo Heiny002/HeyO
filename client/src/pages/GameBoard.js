@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaArrowLeft, FaComments, FaGamepad, FaPlus, FaPlay } from 'react-icons/fa';
+import { FaArrowLeft, FaComments, FaGamepad, FaPlus, FaPlay, FaCog, FaCamera, FaImage } from 'react-icons/fa';
 
 const GameBoard = () => {
   const { id } = useParams();
@@ -21,6 +21,11 @@ const GameBoard = () => {
   const [items, setItems] = useState([]);
   const [gameStarted, setGameStarted] = useState(false);
   const [tileContents, setTileContents] = useState([]);
+  
+  // State for tile selection popup
+  const [selectedTile, setSelectedTile] = useState(null);
+  const [tileNote, setTileNote] = useState('');
+  const fileInputRef = useRef(null);
 
   // Calculate minimum required items
   const calculateMinItems = (rows, columns) => {
@@ -84,6 +89,24 @@ const GameBoard = () => {
     setItemInput('');
   };
 
+  // Generate dummy test items
+  const generateDummyItems = () => {
+    if (!game) return;
+    
+    const minItems = calculateMinItems(game.rows, game.columns);
+    const dummyItems = [];
+    
+    // Create enough dummy items to meet the minimum requirement
+    for (let i = 1; i <= minItems; i++) {
+      dummyItems.push({
+        id: Date.now() + i,
+        text: `Test item ${i}`
+      });
+    }
+    
+    setItems(dummyItems);
+  };
+
   // Handle game start
   const handleStartGame = () => {
     if (!game) return;
@@ -98,6 +121,48 @@ const GameBoard = () => {
     // Assign items to tiles
     setTileContents(shuffledItems);
     setGameStarted(true);
+    
+    // Switch to board tab automatically
+    setActiveTab('board');
+  };
+
+  // Handle tile click
+  const handleTileClick = (index) => {
+    if (gameStarted && tileContents[index]) {
+      setSelectedTile({
+        index,
+        item: tileContents[index]
+      });
+      setTileNote('');
+    }
+  };
+
+  // Handle claim button click
+  const handleClaimTile = () => {
+    // In a real app, you would save this data to a database
+    console.log(`Claimed tile ${selectedTile.index + 1} with note: ${tileNote}`);
+    
+    // Close the popup
+    setSelectedTile(null);
+  };
+
+  // Handle photo selection
+  const handlePhotoSelect = (type) => {
+    if (type === 'camera') {
+      // For mobile devices to capture photo
+      if (fileInputRef.current) {
+        fileInputRef.current.setAttribute('capture', 'environment');
+        fileInputRef.current.setAttribute('accept', 'image/*');
+        fileInputRef.current.click();
+      }
+    } else {
+      // For selecting from gallery
+      if (fileInputRef.current) {
+        fileInputRef.current.removeAttribute('capture');
+        fileInputRef.current.setAttribute('accept', 'image/*');
+        fileInputRef.current.click();
+      }
+    }
   };
 
   // Format date to be more readable
@@ -123,17 +188,44 @@ const GameBoard = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
+      {/* Hidden file input for photo upload */}
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        className="hidden" 
+        onChange={(e) => {
+          // Handle the file upload
+          if (e.target.files && e.target.files[0]) {
+            console.log('Selected file:', e.target.files[0]);
+            // In a real app, you would upload this file to a server
+          }
+        }}
+      />
+
       {/* Header with tabs */}
       <header className="bg-white shadow-md">
         <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center mb-4">
-            <button 
-              className="mr-4 p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
-              onClick={() => navigate('/games')}
-            >
-              <FaArrowLeft />
-            </button>
-            <h1 className="text-2xl font-bold">{game.name}</h1>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center">
+              <button 
+                className="mr-4 p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
+                onClick={() => navigate('/games')}
+              >
+                <FaArrowLeft />
+              </button>
+              <h1 className="text-2xl font-bold">{game.name}</h1>
+            </div>
+            
+            {/* Admin button for generating dummy items */}
+            {!gameStarted && (
+              <button 
+                className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
+                onClick={generateDummyItems}
+                title="Generate test items"
+              >
+                <FaCog />
+              </button>
+            )}
           </div>
           
           <div className="flex border-b">
@@ -198,6 +290,7 @@ const GameBoard = () => {
                     whileHover={{ scale: 0.95 }}
                     whileTap={{ scale: 0.9 }}
                     className="bg-gradient-to-br from-primary-light to-secondary-light rounded-lg shadow-md cursor-pointer flex items-center justify-center font-bold text-white text-lg p-2 overflow-hidden"
+                    onClick={() => handleTileClick(index)}
                   >
                     {gameStarted && tileContents[index] 
                       ? <span className="text-center">{tileContents[index].text}</span>
@@ -315,6 +408,75 @@ const GameBoard = () => {
           )}
         </AnimatePresence>
       </main>
+
+      {/* Tile popup dialog */}
+      <AnimatePresence>
+        {selectedTile && (
+          <motion.div
+            className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setSelectedTile(null)}
+          >
+            <motion.div 
+              className="bg-white rounded-xl w-full max-w-md p-6 shadow-2xl"
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2 className="text-2xl font-bold mb-4 text-center text-primary">
+                {selectedTile.item.text}
+              </h2>
+              
+              <div className="mb-4">
+                <label className="block text-gray-700 font-bold mb-2" htmlFor="tileNote">
+                  Add a note:
+                </label>
+                <textarea
+                  id="tileNote"
+                  className="input-field min-h-[100px]"
+                  placeholder="Write your note here..."
+                  value={tileNote}
+                  onChange={(e) => setTileNote(e.target.value)}
+                ></textarea>
+              </div>
+              
+              <div className="flex flex-col space-y-3">
+                <motion.button
+                  className="btn-success w-full flex items-center justify-center"
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleClaimTile}
+                >
+                  Claim
+                </motion.button>
+                
+                <div className="flex space-x-2">
+                  <motion.button
+                    className="btn-secondary flex-1 flex items-center justify-center"
+                    whileHover={{ scale: 1.03 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => handlePhotoSelect('camera')}
+                  >
+                    <FaCamera className="mr-2" /> Camera
+                  </motion.button>
+                  
+                  <motion.button
+                    className="btn-accent flex-1 flex items-center justify-center"
+                    whileHover={{ scale: 1.03 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => handlePhotoSelect('gallery')}
+                  >
+                    <FaImage className="mr-2" /> Gallery
+                  </motion.button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
