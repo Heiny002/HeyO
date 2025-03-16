@@ -349,11 +349,14 @@ const GameBoard = () => {
     const matches = [...text.matchAll(mentionRegex)];
     const mentionedUsers = matches.map(match => match[1]);
     
+    // Exclude game creator from hiddenFrom list if they are the one approving
+    const filteredHiddenUsers = mentionedUsers.filter(user => user !== currentUser);
+    
     // Add to items
     const newItem = {
       id: Date.now(),
       text: suggestion.text,
-      hiddenFrom: mentionedUsers.length > 0 ? mentionedUsers : undefined
+      hiddenFrom: filteredHiddenUsers.length > 0 ? filteredHiddenUsers : undefined
     };
     
     setItems([...items, newItem]);
@@ -1124,7 +1127,7 @@ const GameBoard = () => {
                               </div>
                             )}
                             
-                            {/* Tile suggestion approval button - visible only to game creator, even if mentioned */}
+                            {/* Tile suggestion approval button - ALWAYS visible to game creator */}
                             {isSuggestionMessage && !gameStarted && isGameCreator && (
                               <div className="mt-2 flex justify-end">
                                 <button 
