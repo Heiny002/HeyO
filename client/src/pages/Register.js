@@ -2,7 +2,7 @@ import React, { useState, useContext, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { motion } from 'framer-motion';
-import { FaUser, FaEnvelope, FaLock, FaExclamationCircle } from 'react-icons/fa';
+import { FaUser, FaEnvelope, FaLock, FaExclamationCircle, FaInfoCircle, FaArrowRight } from 'react-icons/fa';
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -14,7 +14,7 @@ const Register = () => {
   const [showError, setShowError] = useState(false);
   const [passwordsMatch, setPasswordsMatch] = useState(true);
   
-  const { register, isAuthenticated, error, clearError } = useContext(AuthContext);
+  const { register, isAuthenticated, error, clearError, allUsers } = useContext(AuthContext);
   const navigate = useNavigate();
   
   useEffect(() => {
@@ -63,6 +63,10 @@ const Register = () => {
       navigate('/games');
     }
   };
+
+  const goToLogin = () => {
+    navigate('/login');
+  };
   
   return (
     <div className="page-container flex flex-col items-center justify-center">
@@ -93,6 +97,48 @@ const Register = () => {
             <span>{error}</span>
           </motion.div>
         )}
+        
+        {/* Demo Users Callout Section */}
+        <motion.div 
+          className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.3 }}
+        >
+          <div className="flex items-center mb-2">
+            <FaInfoCircle className="text-blue-500 mr-2" />
+            <h3 className="text-lg font-medium text-blue-700">Try Simulation Mode</h3>
+          </div>
+          <p className="text-sm text-blue-600 mb-3">
+            Instead of registering, you can use our simulation accounts to try the app quickly!
+          </p>
+          
+          <div className="flex flex-wrap gap-2 mb-3">
+            {allUsers.slice(0, 2).map(user => (
+              <div key={user.id} className="flex items-center bg-white rounded-full px-2 py-1 shadow-sm">
+                <img 
+                  src={user.avatar} 
+                  alt={user.username} 
+                  className="w-6 h-6 rounded-full mr-1" 
+                />
+                <span className="text-xs font-medium">{user.username}</span>
+              </div>
+            ))}
+            <div className="flex items-center bg-white rounded-full px-2 py-1 shadow-sm">
+              <span className="text-xs font-medium">+{allUsers.length - 2} more</span>
+            </div>
+          </div>
+          
+          <div className="flex justify-end">
+            <motion.button
+              onClick={goToLogin}
+              className="text-sm flex items-center text-blue-600 font-medium hover:text-blue-800"
+              whileHover={{ x: 5 }}
+            >
+              Try simulation mode <FaArrowRight className="ml-1" />
+            </motion.button>
+          </div>
+        </motion.div>
         
         <div className="bg-white shadow-lg rounded-2xl p-8">
           <form onSubmit={handleSubmit}>

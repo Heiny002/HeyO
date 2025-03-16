@@ -2,7 +2,7 @@ import React, { useContext, useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaSignOutAlt, FaUserCog, FaChevronDown, FaCheck } from 'react-icons/fa';
+import { FaSignOutAlt, FaUserCircle, FaChevronDown, FaCheck, FaSignInAlt } from 'react-icons/fa';
 
 const Header = () => {
   const { isAuthenticated, user, logout, allUsers, switchUser, isSimulatedUser } = useContext(AuthContext);
@@ -18,6 +18,11 @@ const Header = () => {
   const handleSwitchUser = (userId) => {
     switchUser(userId);
     setShowUserMenu(false);
+    
+    // If not authenticated, navigate to games after selecting a user
+    if (!isAuthenticated) {
+      navigate('/games');
+    }
   };
   
   // Close menu when clicking outside
@@ -50,18 +55,18 @@ const Header = () => {
           </motion.h1>
         </Link>
         
-        {isAuthenticated ? (
-          <div className="flex items-center gap-4">
-            {/* User Switcher - Only for admins */}
-            {(user?.isAdmin || isSimulatedUser) && (
-              <div className="relative" ref={menuRef}>
-                <motion.button
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors shadow-sm"
-                  onClick={() => setShowUserMenu(!showUserMenu)}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  <div className="flex items-center">
+        <div className="flex items-center gap-4">
+          {/* User Simulator - Available on all pages */}
+          <div className="relative" ref={menuRef}>
+            <motion.button
+              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors shadow-sm"
+              onClick={() => setShowUserMenu(!showUserMenu)}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              <div className="flex items-center">
+                {isAuthenticated ? (
+                  <>
                     <img 
                       src={user?.avatar || `https://ui-avatars.com/api/?name=${user?.username}`} 
                       alt="User avatar" 
@@ -71,90 +76,102 @@ const Header = () => {
                       {user?.username}
                       {isSimulatedUser && <span className="text-xs text-gray-500 ml-1">(Simulated)</span>}
                     </span>
-                  </div>
-                  <FaChevronDown className={`transform transition-transform ${showUserMenu ? 'rotate-180' : ''}`} />
-                </motion.button>
-                
-                <AnimatePresence>
-                  {showUserMenu && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg overflow-hidden z-20"
-                    >
-                      <div className="p-3 bg-gray-50 border-b border-gray-200">
-                        <h3 className="text-sm font-semibold text-gray-700">Simulating Users</h3>
-                        <p className="text-xs text-gray-500">Switch user perspective</p>
-                      </div>
-                      <div className="py-1">
-                        {allUsers.map((switchableUser) => (
-                          <button
-                            key={switchableUser.id}
-                            className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center justify-between"
-                            onClick={() => handleSwitchUser(switchableUser.id)}
-                          >
-                            <div className="flex items-center">
-                              <img 
-                                src={switchableUser.avatar} 
-                                alt={`${switchableUser.username} avatar`} 
-                                className="w-6 h-6 rounded-full mr-2"
-                              />
-                              <span>
-                                {switchableUser.username}
-                                {switchableUser.isAdmin && <span className="text-xs text-blue-500 ml-1">(Admin)</span>}
-                              </span>
-                            </div>
-                            {user?.id === switchableUser.id && <FaCheck className="text-green-500" />}
-                          </button>
-                        ))}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                  </>
+                ) : (
+                  <>
+                    <FaUserCircle className="w-6 h-6 mr-2 text-gray-600" />
+                    <span className="text-gray-700">Simulate User</span>
+                  </>
+                )}
               </div>
-            )}
-            
-            <motion.span 
-              className="text-gray-700 hidden md:inline-block"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.2 }}
-            >
-              Welcome, <span className="font-bold text-primary">{user?.username}</span>
-            </motion.span>
-            
-            <motion.button
-              className="flex items-center gap-2 px-4 py-2 rounded-full bg-primary text-white hover:bg-primary-dark transition-colors shadow-md"
-              onClick={handleLogout}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              <FaSignOutAlt /> <span className="hidden md:inline">Logout</span>
+              <FaChevronDown className={`transform transition-transform ${showUserMenu ? 'rotate-180' : ''}`} />
             </motion.button>
+            
+            <AnimatePresence>
+              {showUserMenu && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg overflow-hidden z-20"
+                >
+                  <div className="p-3 bg-gray-50 border-b border-gray-200">
+                    <h3 className="text-sm font-semibold text-gray-700">Simulating Users</h3>
+                    <p className="text-xs text-gray-500">Select a user to simulate</p>
+                  </div>
+                  <div className="py-1">
+                    {allUsers.map((switchableUser) => (
+                      <button
+                        key={switchableUser.id}
+                        className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center justify-between"
+                        onClick={() => handleSwitchUser(switchableUser.id)}
+                      >
+                        <div className="flex items-center">
+                          <img 
+                            src={switchableUser.avatar} 
+                            alt={`${switchableUser.username} avatar`} 
+                            className="w-6 h-6 rounded-full mr-2"
+                          />
+                          <span>
+                            {switchableUser.username}
+                            {switchableUser.isAdmin && <span className="text-xs text-blue-500 ml-1">(Admin)</span>}
+                          </span>
+                        </div>
+                        {user?.id === switchableUser.id && <FaCheck className="text-green-500" />}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="p-2 bg-gray-50 border-t border-gray-200 text-xs text-gray-500">
+                    <p>All users can log in with password: "password"</p>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
-        ) : (
-          <div className="flex gap-2">
-            <Link to="/login">
-              <motion.button 
-                className="btn-secondary pop-out"
+            
+          {isAuthenticated ? (
+            <>
+              <motion.span 
+                className="text-gray-700 hidden md:inline-block"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.2 }}
+              >
+                Welcome, <span className="font-bold text-primary">{user?.username}</span>
+              </motion.span>
+              
+              <motion.button
+                className="flex items-center gap-2 px-4 py-2 rounded-full bg-primary text-white hover:bg-primary-dark transition-colors shadow-md"
+                onClick={handleLogout}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
               >
-                Login
+                <FaSignOutAlt /> <span className="hidden md:inline">Logout</span>
               </motion.button>
-            </Link>
-            <Link to="/register">
-              <motion.button 
-                className="btn-primary pop-out"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                Register
-              </motion.button>
-            </Link>
-          </div>
-        )}
+            </>
+          ) : (
+            <div className="flex gap-2">
+              <Link to="/login">
+                <motion.button 
+                  className="btn-secondary pop-out flex items-center gap-1"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <FaSignInAlt className="mr-1" /> Login
+                </motion.button>
+              </Link>
+              <Link to="/register">
+                <motion.button 
+                  className="btn-primary pop-out"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  Register
+                </motion.button>
+              </Link>
+            </div>
+          )}
+        </div>
       </div>
     </motion.header>
   );

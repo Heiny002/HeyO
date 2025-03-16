@@ -91,6 +91,15 @@ export const AuthProvider = ({ children }) => {
       setIsAuthenticated(true);
       setIsSimulatedUser(true);
       localStorage.setItem('simulatedUserId', userId.toString());
+      
+      // Clear any previous error messages when switching users
+      setError(null);
+      
+      // Make sure auth state is updated immediately
+      if (!isAuthenticated) {
+        // Add a simulated token to maintain consistency with the rest of the app
+        localStorage.setItem('token', 'simulated-token-' + Date.now());
+      }
     }
   };
 

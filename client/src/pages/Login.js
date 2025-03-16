@@ -2,7 +2,7 @@ import React, { useState, useContext, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { motion } from 'framer-motion';
-import { FaUser, FaLock, FaExclamationCircle } from 'react-icons/fa';
+import { FaUser, FaLock, FaExclamationCircle, FaInfoCircle } from 'react-icons/fa';
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -11,7 +11,7 @@ const Login = () => {
   });
   const [showError, setShowError] = useState(false);
   
-  const { login, isAuthenticated, error, clearError } = useContext(AuthContext);
+  const { login, isAuthenticated, error, clearError, allUsers } = useContext(AuthContext);
   const navigate = useNavigate();
   
   useEffect(() => {
@@ -43,6 +43,13 @@ const Login = () => {
     if (success) {
       navigate('/games');
     }
+  };
+
+  const fillDemoCredentials = (username) => {
+    setFormData({
+      username,
+      password: 'password'
+    });
   };
   
   return (
@@ -137,6 +144,40 @@ const Login = () => {
               </p>
             </div>
           </form>
+
+          {/* Demo Users Section */}
+          <div className="mt-8 pt-6 border-t border-gray-200">
+            <div className="flex items-center mb-3">
+              <FaInfoCircle className="text-primary mr-2" />
+              <h3 className="text-lg font-medium text-gray-800">Simulation Accounts</h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">
+              You can use any of these accounts with password: <strong>password</strong>
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {allUsers.map(demoUser => (
+                <motion.button
+                  key={demoUser.id}
+                  className="flex items-center p-2 border border-gray-200 rounded-lg hover:bg-gray-50"
+                  onClick={() => fillDemoCredentials(demoUser.username)}
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <img 
+                    src={demoUser.avatar} 
+                    alt={`${demoUser.username} avatar`}
+                    className="w-8 h-8 rounded-full mr-2"
+                  />
+                  <div className="text-left">
+                    <div className="font-medium text-gray-800">{demoUser.username}</div>
+                    <div className="text-xs text-gray-500">
+                      {demoUser.isAdmin ? 'Admin User' : 'Regular User'}
+                    </div>
+                  </div>
+                </motion.button>
+              ))}
+            </div>
+          </div>
         </div>
       </motion.div>
     </div>
