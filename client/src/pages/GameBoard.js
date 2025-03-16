@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaArrowLeft, FaComments, FaGamepad, FaPlus, FaPlay, FaCog, FaCamera, FaImage, FaTrophy, FaCheck, FaTimes, FaComment, FaEnvelope, FaCopy, FaShareAlt } from 'react-icons/fa';
+import { FaArrowLeft, FaComments, FaGamepad, FaPlus, FaPlay, FaCog, FaCamera, FaImage, FaTrophy, FaCheck, FaTimes, FaComment, FaEnvelope, FaCopy, FaShareAlt, FaEdit, FaTrash, FaClock } from 'react-icons/fa';
 import { AuthContext } from '../context/AuthContext';
 
 const GameBoard = () => {
@@ -59,6 +59,104 @@ const GameBoard = () => {
   // Add after user declaration around line 12
   const [isGameCreator, setIsGameCreator] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+
+  // New states for item editing
+  const [editingItem, setEditingItem] = useState(null);
+  const [editItemInput, setEditItemInput] = useState('');
+  
+  // New state for timer functionality
+  const [selectedTimer, setSelectedTimer] = useState(0); // Default to "No timer" (0 minutes)
+  const [itemTimers, setItemTimers] = useState({}); // Track active timers {itemId: {endTime, remaining}}
+  const [timerIntervalId, setTimerIntervalId] = useState(null);
+
+  // Available timer options in minutes
+  const getTimerOptions = () => {
+    // Add "No timer" option with value 0
+    const noTimer = [0];
+    
+    // 1-10 minutes (every minute)
+    const oneToTen = Array.from({length: 10}, (_, i) => i + 1);
+    
+    // 12-30 minutes (every even minute)
+    const twelveToThirty = Array.from({length: 10}, (_, i) => (i * 2) + 12);
+    
+    // 35-120 minutes (every 5 minutes)
+    const thirtyFiveToOneHundredTwenty = Array.from({length: 18}, (_, i) => (i * 5) + 35);
+    
+    return [...noTimer, ...oneToTen, ...twelveToThirty, ...thirtyFiveToOneHundredTwenty];
+  };
+  
+  // Format timer display
+  const formatTimeDisplay = (minutes) => {
+    if (minutes === 0) return "No timer";
+    if (minutes >= 60) {
+      const hours = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      return `${hours}hr:${mins.toString().padStart(2, '0')}mins`;
+    }
+    return `${minutes}mins`;
+  };
+  
+  // Format countdown display
+  const formatCountdown = (remainingSeconds) => {
+    if (remainingSeconds <= 0) return "Time's up!";
+    
+    const minutes = Math.floor(remainingSeconds / 60);
+    const seconds = remainingSeconds % 60;
+    
+    if (minutes >= 60) {
+      const hours = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      return `${hours}hr:${mins.toString().padStart(2, '0')}m:${seconds.toString().padStart(2, '0')}s`;
+    }
+    
+    return `${minutes}m:${seconds.toString().padStart(2, '0')}s`;
+  };
+
+  // Start the timer interval when game starts
+  useEffect(() => {
+    if (gameStarted && !timerIntervalId) {
+      // Update timers every second
+      const intervalId = setInterval(() => {
+        setItemTimers(prevTimers => {
+          const now = Date.now();
+          const updatedTimers = {...prevTimers};
+          
+          // Update remaining time for each active timer
+          Object.keys(updatedTimers).forEach(itemId => {
+            const timer = updatedTimers[itemId];
+            if (timer.endTime > now) {
+              updatedTimers[itemId] = {
+                ...timer,
+                remaining: Math.floor((timer.endTime - now) / 1000)
+              };
+            } else {
+              updatedTimers[itemId] = {
+                ...timer,
+                remaining: 0,
+                expired: true
+              };
+            }
+          });
+          
+          return updatedTimers;
+        });
+      }, 1000);
+      
+      setTimerIntervalId(intervalId);
+      
+      return () => clearInterval(intervalId);
+    }
+  }, [gameStarted]);
+  
+  // Clean up interval on unmount
+  useEffect(() => {
+    return () => {
+      if (timerIntervalId) {
+        clearInterval(timerIntervalId);
+      }
+    };
+  }, [timerIntervalId]);
 
   // Add a reference to store the createdBy value for debugging
   const gameCreatorRef = useRef(null);
@@ -357,12 +455,12 @@ const GameBoard = () => {
       
       // Only initialize if we don't have user-specific data loaded
       if (!userGameState.claimedTiles) {
-        setClaimedTiles(Array(totalTiles).fill(false));
-        setTilePhotos(Array(totalTiles).fill(null));
-        setTileApprovals(Array(totalTiles).fill([]));
-        setTileDenials(Array(totalTiles).fill([]));
+      setClaimedTiles(Array(totalTiles).fill(false));
+      setTilePhotos(Array(totalTiles).fill(null));
+      setTileApprovals(Array(totalTiles).fill([]));
+      setTileDenials(Array(totalTiles).fill([]));
         setTileNotes(Array(totalTiles).fill(null));
-      }
+    }
     }
   }, [game, userGameState]);
 
@@ -383,7 +481,7 @@ const GameBoard = () => {
     setMessage('');
   };
 
-  // Handle item submission
+  // Handle item submission with timer
   const handleAddItem = (e) => {
     e.preventDefault();
     
@@ -398,7 +496,8 @@ const GameBoard = () => {
     const newItem = {
       id: Date.now(),
       text: text,
-      hiddenFrom: mentionedUsers
+      hiddenFrom: mentionedUsers,
+      timerMinutes: selectedTimer // Add timer duration (can be 0 for no timer)
     };
     
     setItems([...items, newItem]);
@@ -408,12 +507,76 @@ const GameBoard = () => {
     const newMessage = {
       id: chat.length + 1,
       sender: 'System',
-      message: `${currentUser} added a new item: "${text}"`,
+      message: `${currentUser} added a new item: "${text}"${selectedTimer > 0 ? ` (${formatTimeDisplay(selectedTimer)})` : ''}`,
       timestamp: new Date().toISOString(),
       item: newItem
     };
     
     setChat([...chat, newMessage]);
+  };
+
+  // Handle editing an item
+  const handleEditItem = (item) => {
+    setEditingItem(item);
+    setEditItemInput(item.text);
+    setSelectedTimer(item.timerMinutes || 5);
+  };
+
+  // Handle saving edited item
+  const handleSaveEdit = () => {
+    if (!editingItem || !editItemInput.trim()) return;
+    
+    // Check if the item contains @ mentions
+    const text = editItemInput.trim();
+    const mentionRegex = /@(\w+)/g;
+    const matches = [...text.matchAll(mentionRegex)];
+    const mentionedUsers = matches.map(match => match[1]);
+    
+    const updatedItem = {
+      ...editingItem,
+      text: text,
+      hiddenFrom: mentionedUsers,
+      timerMinutes: selectedTimer
+    };
+    
+    // Update the item in the items array
+    setItems(items.map(item => item.id === editingItem.id ? updatedItem : item));
+    
+    // Add a message to the chat about the edit
+    const newMessage = {
+      id: chat.length + 1,
+      sender: 'System',
+      message: `${currentUser} edited an item: "${text}" (${formatTimeDisplay(selectedTimer)})`,
+      timestamp: new Date().toISOString(),
+      item: updatedItem
+    };
+    
+    setChat([...chat, newMessage]);
+    
+    // Reset editing state
+    setEditingItem(null);
+    setEditItemInput('');
+  };
+
+  // Handle deleting an item
+  const handleDeleteItem = (itemId) => {
+    if (window.confirm('Are you sure you want to delete this item?')) {
+      // Find the item to be deleted for the message
+      const itemToDelete = items.find(item => item.id === itemId);
+      
+      // Filter out the item from the items array
+      setItems(items.filter(item => item.id !== itemId));
+      
+      // Add a message to the chat about the deletion
+      const newMessage = {
+        id: chat.length + 1,
+        sender: 'System',
+        message: `${currentUser} removed an item: "${itemToDelete?.text || 'Unknown item'}"`,
+        timestamp: new Date().toISOString()
+      };
+      
+      setChat([...chat, newMessage]);
+    }
   };
 
   // Handle friend invitation by username
@@ -482,7 +645,7 @@ const GameBoard = () => {
     }
   };
 
-  // Handle tile suggestion from users
+  // Handle tile suggestion with timer
   const handleSuggestTile = (e) => {
     e.preventDefault();
     
@@ -499,12 +662,13 @@ const GameBoard = () => {
     console.log("Current user is creator:", isGameCreator);
     console.log("Game creator from ref:", gameCreatorRef.current);
     
-    // Create suggestion with proper hiddenFrom
+    // Create suggestion with proper hiddenFrom and timer
     const newSuggestion = {
       id: Date.now(),
       text: text,
       suggestedBy: currentUser,
-      hiddenFrom: mentionedUsers.length > 0 ? mentionedUsers : undefined
+      hiddenFrom: mentionedUsers.length > 0 ? mentionedUsers : undefined,
+      timerMinutes: selectedTimer
     };
     
     console.log("New suggestion object:", newSuggestion);
@@ -515,7 +679,7 @@ const GameBoard = () => {
     const newMessage = {
       id: chat.length + 1,
       sender: 'System',
-      message: `${currentUser} suggested a new tile: "${text}"`,
+      message: `${currentUser} suggested a new tile: "${text}" (${formatTimeDisplay(selectedTimer)})`,
       timestamp: new Date().toISOString(),
       suggestion: newSuggestion
     };
@@ -530,17 +694,18 @@ const GameBoard = () => {
     document.getElementById('suggestTileMenu').classList.add('hidden');
   };
 
-  // Handle approving a suggested tile
+  // Handle approving a suggested tile (updated with timer)
   const handleApproveSuggestion = (suggestionId) => {
     const suggestion = suggestedTiles.find(s => s.id === suggestionId);
     
     if (!suggestion) return;
     
-    // Add to items - preserve the hiddenFrom property completely
+    // Add to items - preserve the hiddenFrom property completely and add timer
     const newItem = {
       id: Date.now(),
       text: suggestion.text,
-      hiddenFrom: suggestion.hiddenFrom
+      hiddenFrom: suggestion.hiddenFrom,
+      timerMinutes: suggestion.timerMinutes || selectedTimer
     };
     
     setItems([...items, newItem]);
@@ -552,7 +717,7 @@ const GameBoard = () => {
     const newMessage = {
       id: chat.length + 1,
       sender: 'System',
-      message: `${currentUser} approved and added a new tile to the game.`,
+      message: `${currentUser} approved and added a new tile to the game: "${suggestion.text}" (${formatTimeDisplay(newItem.timerMinutes)})`,
       timestamp: new Date().toISOString(),
       item: newItem
     };
@@ -578,7 +743,7 @@ const GameBoard = () => {
     setItems(dummyItems);
   };
 
-  // Handle game start
+  // Handle game start - updated to initialize timers
   const handleStartGame = () => {
     if (!hasEnoughItems) {
       return;
@@ -587,6 +752,24 @@ const GameBoard = () => {
     // In a real app, you would generate unique boards for each user
     // For now, we'll simulate this for the current user
     const userBoards = {};
+    
+    // Initialize timers for all items that have a timer
+    const initialTimers = {};
+    const now = Date.now();
+    
+    items.forEach(item => {
+      // Only initialize timers for items with timerMinutes > 0
+      if (item.timerMinutes > 0) {
+        const durationMs = item.timerMinutes * 60 * 1000;
+        initialTimers[item.id] = {
+          endTime: now + durationMs,
+          remaining: Math.floor(durationMs / 1000),
+          expired: false
+        };
+      }
+    });
+    
+    setItemTimers(initialTimers);
     
     // Create a board for each user with truly unique randomization
     users.forEach(username => {
@@ -627,7 +810,7 @@ const GameBoard = () => {
     const newMessage = {
       id: chat.length + 1,
       sender: 'System',
-      message: 'The game has started! Click on a tile to claim it.',
+      message: 'The game has started! Click on a tile to claim it. Timers have started counting down!',
       timestamp: new Date().toISOString()
     };
     
@@ -665,6 +848,14 @@ const GameBoard = () => {
     
     // Check if this tile is hidden from the current user
     if (isTileHiddenFromUser(tileContents[index])) {
+      return;
+    }
+    
+    // Check if the timer for this tile has expired
+    const tileItem = tileContents[index];
+    const timerInfo = tileItem && tileItem.id ? getItemTimerStatus(tileItem) : null;
+    if (timerInfo && timerInfo.expired) {
+      // Don't allow interaction with expired tiles
       return;
     }
     
@@ -718,38 +909,38 @@ const GameBoard = () => {
     
     // Check rows if that win condition is enabled
     if (winConditions.byRow) {
-      for (let row = 0; row < rows; row++) {
-        let rowComplete = true;
-        for (let col = 0; col < columns; col++) {
-          const index = row * columns + col;
-          // Tile must be claimed AND approved by enough users
-          if (!newClaimedTiles[index] || !isTileApproved(index)) {
-            rowComplete = false;
-            break;
-          }
+    for (let row = 0; row < rows; row++) {
+      let rowComplete = true;
+      for (let col = 0; col < columns; col++) {
+        const index = row * columns + col;
+        // Tile must be claimed AND approved by enough users
+        if (!newClaimedTiles[index] || !isTileApproved(index)) {
+          rowComplete = false;
+          break;
         }
-        if (rowComplete) {
-          setWinner("Row " + (row + 1));
+      }
+      if (rowComplete) {
+        setWinner("Row " + (row + 1));
           foundWin = true;
-          return true;
+        return true;
         }
       }
     }
     
     // Check columns if that win condition is enabled
     if (winConditions.byColumn && !foundWin) {
-      for (let col = 0; col < columns; col++) {
-        let colComplete = true;
-        for (let row = 0; row < rows; row++) {
-          const index = row * columns + col;
-          // Tile must be claimed AND approved by enough users
-          if (!newClaimedTiles[index] || !isTileApproved(index)) {
-            colComplete = false;
-            break;
-          }
+    for (let col = 0; col < columns; col++) {
+      let colComplete = true;
+      for (let row = 0; row < rows; row++) {
+        const index = row * columns + col;
+        // Tile must be claimed AND approved by enough users
+        if (!newClaimedTiles[index] || !isTileApproved(index)) {
+          colComplete = false;
+          break;
         }
-        if (colComplete) {
-          setWinner("Column " + (col + 1));
+      }
+      if (colComplete) {
+        setWinner("Column " + (col + 1));
           foundWin = true;
           return true;
         }
@@ -1010,6 +1201,17 @@ const GameBoard = () => {
   // Modify our item adding logic to only allow the original creator (no admin)
   const canAddItems = currentUser === originalCreator;
 
+  // Function to get item timer status
+  const getItemTimerStatus = (item) => {
+    if (!gameStarted) return null;
+    if (!item) return null;
+    
+    const timer = itemTimers[item.id];
+    if (!timer) return null;
+    
+    return timer;
+  };
+
   return (
     <div className="flex flex-col bg-background">
       {/* Hidden file input for photo upload */}
@@ -1050,7 +1252,7 @@ const GameBoard = () => {
                 <div className="ml-4 bg-green-100 text-green-800 px-3 py-1 rounded-full flex items-center">
                   <FaGamepad className="mr-1 text-green-600" /> 
                   Creator
-                </div>
+            </div>
               )}
               
               {isAdmin && (
@@ -1080,16 +1282,16 @@ const GameBoard = () => {
                 Debug: Force Creator
               </button>
             
-              {/* Admin button for generating dummy items */}
-              {!gameStarted && (
-                <button 
-                  className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
-                  onClick={generateDummyItems}
-                  title="Generate test items"
-                >
-                  <FaCog />
-                </button>
-              )}
+            {/* Admin button for generating dummy items */}
+            {!gameStarted && (
+              <button 
+                className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
+                onClick={generateDummyItems}
+                title="Generate test items"
+              >
+                <FaCog />
+              </button>
+            )}
             </div>
           </div>
           
@@ -1175,6 +1377,11 @@ const GameBoard = () => {
                   const hasPhoto = tilePhotos[index] !== null;
                   const isHiddenFromUser = gameStarted && tileContents[index] && isTileHiddenFromUser(tileContents[index]);
                   
+                  // Get timer status for this tile
+                  const tileItem = gameStarted && tileContents[index] ? tileContents[index] : null;
+                  const timerInfo = tileItem && tileItem.id ? getItemTimerStatus(tileItem) : null;
+                  const isExpired = timerInfo && timerInfo.expired;
+                  
                   let tileStyle = "bg-gradient-to-br from-primary-light to-secondary-light cursor-pointer";
                   
                   if (isClaimed && isApproved) {
@@ -1183,6 +1390,8 @@ const GameBoard = () => {
                     tileStyle = "bg-gradient-to-br from-yellow-400 to-yellow-600 cursor-default";
                   } else if (isHiddenFromUser) {
                     tileStyle = "bg-gradient-to-br from-gray-400 to-gray-600 cursor-not-allowed";
+                  } else if (isExpired) {
+                    tileStyle = "bg-gradient-to-br from-red-300 to-red-500 cursor-not-allowed";
                   }
                   
                   return (
@@ -1197,11 +1406,19 @@ const GameBoard = () => {
                         stiffness: 260,
                         damping: 20 
                       }}
-                      whileHover={{ scale: isClaimed || isHiddenFromUser ? 1 : 0.95 }}
-                      whileTap={{ scale: isClaimed || isHiddenFromUser ? 1 : 0.9 }}
+                      whileHover={{ scale: isClaimed || isHiddenFromUser || isExpired ? 1 : 0.95 }}
+                      whileTap={{ scale: isClaimed || isHiddenFromUser || isExpired ? 1 : 0.9 }}
                       className={`rounded-lg shadow-md ${tileStyle} flex items-center justify-center font-bold text-white text-lg p-2 overflow-hidden relative`}
-                      onClick={() => !isClaimed && !isHiddenFromUser && handleTileClick(index)}
+                      onClick={() => !isClaimed && !isHiddenFromUser && !isExpired && handleTileClick(index)}
                     >
+                      {/* Timer indicator in top right corner */}
+                      {gameStarted && timerInfo && tileItem?.timerMinutes > 0 && (
+                        <div className={`absolute top-1 right-1 bg-black bg-opacity-60 rounded-md px-1.5 py-0.5 text-xs flex items-center ${timerInfo.remaining <= 60 ? 'text-red-300 font-bold' : 'text-white'}`}>
+                          <FaClock className="mr-1 text-[10px]" />
+                          {formatCountdown(timerInfo.remaining)}
+                        </div>
+                      )}
+                      
                       {hasPhoto && (
                         <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center">
                           <FaImage className="text-white text-xl" />
@@ -1209,6 +1426,11 @@ const GameBoard = () => {
                       )}
                       {isHiddenFromUser ? (
                         <span className="text-center">Hidden</span>
+                      ) : isExpired && !isClaimed ? (
+                        <div className="text-center flex flex-col">
+                          <span>{getItemDisplayText(tileContents[index])}</span>
+                          <span className="text-xs font-normal mt-1 text-gray-200">Time's up!</span>
+                        </div>
                       ) : gameStarted && tileContents[index] ? (
                         <div className="text-center flex flex-col">
                           <span>{getItemDisplayText(tileContents[index])}</span>
@@ -1250,24 +1472,24 @@ const GameBoard = () => {
                         <div id="inviteMenu" className="absolute right-0 mt-2 w-64 bg-white shadow-lg rounded-lg p-3 z-30 hidden">
                           <h3 className="font-bold text-sm mb-2">Invite by Username</h3>
                           <form onSubmit={handleInviteFriend} className="flex mb-3">
-                            <input
-                              type="text"
+                    <input
+                      type="text"
                               className="input-field flex-grow mr-1 text-sm"
                               placeholder="Username..."
                               value={inviteUsername}
                               onChange={(e) => setInviteUsername(e.target.value)}
-                            />
-                            <motion.button
-                              type="submit"
+                    />
+                    <motion.button
+                      type="submit"
                               className="btn-primary text-sm px-2"
-                              whileHover={{ scale: 1.05 }}
-                              whileTap={{ scale: 0.95 }}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
                               disabled={!inviteUsername.trim()}
-                            >
+                    >
                               Add
-                            </motion.button>
-                          </form>
-                          
+                    </motion.button>
+                  </form>
+                  
                           <h3 className="font-bold text-sm mb-2">Share Link</h3>
                           <div className="flex flex-wrap gap-2">
                             <button 
@@ -1312,13 +1534,13 @@ const GameBoard = () => {
                               <ul className="text-sm">
                                 {invitedUsers.map((user, index) => (
                                   <li key={index} className="mb-1">{user}</li>
-                                ))}
-                              </ul>
+                        ))}
+                      </ul>
                             </>
-                          )}
-                        </div>
-                      </div>
-                      
+                    )}
+                  </div>
+                </div>
+                
                       {!gameStarted && (
                         <div className="relative">
                           <button 
@@ -1328,14 +1550,31 @@ const GameBoard = () => {
                             <FaPlus className="mr-1" /> Suggest Tile
                           </button>
                           <div id="suggestTileMenu" className="absolute right-0 mt-2 w-64 bg-white shadow-lg rounded-lg p-3 z-30 hidden">
-                            <form onSubmit={handleSuggestTile} className="flex mb-3">
+                            <form onSubmit={handleSuggestTile} className="flex flex-col mb-3">
                               <input
                                 type="text"
-                                className="input-field flex-grow mr-1 text-sm"
+                                className="input-field flex-grow mb-2 text-sm"
                                 placeholder="Suggest a tile... (use @ to hide from users)"
                                 value={tileInputSuggestion}
                                 onChange={(e) => setTileInputSuggestion(e.target.value)}
                               />
+                              
+                              {/* Timer selector */}
+                              <div className="mb-2">
+                                <label className="block text-xs text-gray-600 mb-1">Time Limit:</label>
+                                <select 
+                                  className="w-full p-1 text-sm border rounded"
+                                  value={selectedTimer}
+                                  onChange={(e) => setSelectedTimer(parseInt(e.target.value))}
+                                >
+                                  {getTimerOptions().map(minutes => (
+                                    <option key={minutes} value={minutes}>
+                                      {formatTimeDisplay(minutes)}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              
                               <motion.button
                                 type="submit"
                                 className="btn-primary text-sm px-2"
@@ -1392,19 +1631,9 @@ const GameBoard = () => {
                         messageColor = getUserColor(msg.sender);
                       }
                       
-                      // For debugging - check button visibility conditions
-                      const shouldShowApprovalButton = isSuggestionMessage && !gameStarted && canApproveSuggestions;
-                      if (isSuggestionMessage) {
-                        console.log(`Approval button conditions:`, {
-                          isSuggestionMessage, 
-                          notGameStarted: !gameStarted, 
-                          isGameCreator,
-                          gameCreatorFromRef: gameCreatorRef.current,
-                          currentUser,
-                          suggestionBy: msg.suggestion.suggestedBy,
-                          shouldShow: shouldShowApprovalButton
-                        });
-                      }
+                      // Get timer info for item or suggestion
+                      const itemForTimer = msg.item || (isSuggestionMessage ? msg.suggestion : null);
+                      const timerInfo = gameStarted && itemForTimer ? getItemTimerStatus(itemForTimer) : null;
                       
                       return (
                         <div key={msg.id} className={`mb-3 ${msg.sender === currentUser ? 'text-right' : ''}`}>
@@ -1424,6 +1653,16 @@ const GameBoard = () => {
                                   : messageText
                               }
                             </p>
+                            
+                            {/* Show timer for items and suggestions if game has started */}
+                            {gameStarted && itemForTimer && itemForTimer.timerMinutes > 0 && (
+                              <div className="mt-1 flex items-center text-xs">
+                                <FaClock className="mr-1" />
+                                <span className={`${timerInfo && timerInfo.remaining <= 60 ? 'text-red-500 font-bold' : 'text-gray-600'}`}>
+                                  {timerInfo ? formatCountdown(timerInfo.remaining) : formatTimeDisplay(itemForTimer.timerMinutes)}
+                                </span>
+                              </div>
+                            )}
                             
                             {/* Display attached photo if exists */}
                             {isClaimMessage && msg.claimInfo.photo && (
@@ -1532,24 +1771,41 @@ const GameBoard = () => {
                     </p>
                     
                     {(canAddItems) && (
-                      <form onSubmit={handleAddItem} className="flex mb-4">
+                      <form onSubmit={handleAddItem} className="flex flex-col mb-4">
                         <input
                           type="text"
-                          className="input-field flex-grow mr-2"
+                          className="input-field w-full mb-2"
                           placeholder="Add an item... (use @ to hide from users)"
                           value={itemInput}
                           onChange={(e) => setItemInput(e.target.value)}
                           disabled={gameStarted}
                         />
-                        <motion.button
-                          type="submit"
-                          className="btn-primary"
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          disabled={!itemInput.trim() || gameStarted}
-                        >
-                          <FaPlus />
-                        </motion.button>
+                        
+                        <div className="flex space-x-2">
+                          {/* Timer selector - moved next to + button */}
+                          <select 
+                            className="flex-grow p-2 text-sm border rounded"
+                            value={selectedTimer}
+                            onChange={(e) => setSelectedTimer(parseInt(e.target.value))}
+                            disabled={gameStarted}
+                          >
+                            {getTimerOptions().map(minutes => (
+                              <option key={minutes} value={minutes}>
+                                {formatTimeDisplay(minutes)}
+                              </option>
+                            ))}
+                          </select>
+                          
+                          <motion.button
+                            type="submit"
+                            className="btn-primary px-4"
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            disabled={!itemInput.trim() || gameStarted}
+                          >
+                            <FaPlus />
+                          </motion.button>
+                        </div>
                       </form>
                     )}
                     
@@ -1571,18 +1827,63 @@ const GameBoard = () => {
                     <div className="flex-grow overflow-y-auto bg-gray-50 rounded-lg p-2 max-h-[40vh]">
                       {items.length > 0 ? (
                         <ul className="space-y-2">
-                          {items.map((item, index) => (
-                            <li key={item.id} className="bg-white p-3 rounded-md shadow-sm flex justify-between items-center">
-                              <span className="font-medium">
-                                {index + 1}. {getItemDisplayText(item)}
-                                {(isGameCreator || isAdmin) && item.hiddenFrom && item.hiddenFrom.length > 0 && (
-                                  <span className="text-xs text-gray-500 ml-2">
-                                    (Hidden from: {item.hiddenFrom.join(', ')})
-                                  </span>
-                                )}
-                              </span>
-                            </li>
-                          ))}
+                          {items.map((item, index) => {
+                            // Get timer info for this item
+                            const timerInfo = gameStarted ? getItemTimerStatus(item) : null;
+                            
+                            return (
+                              <li key={item.id} className="bg-white p-3 rounded-md shadow-sm">
+                                <div className="flex justify-between items-center">
+                                  <div className="flex-grow">
+                                    <span className="font-medium">
+                                      {index + 1}. {getItemDisplayText(item)}
+                                      {(isGameCreator || isAdmin) && item.hiddenFrom && item.hiddenFrom.length > 0 && (
+                                        <span className="text-xs text-gray-500 ml-2">
+                                          (Hidden from: {item.hiddenFrom.join(', ')})
+                                        </span>
+                                      )}
+                                    </span>
+                                    
+                                    {/* Display timer */}
+                                    {item.timerMinutes && (
+                                      <div className="mt-1 flex items-center text-xs">
+                                        <FaClock className="mr-1 text-gray-500" />
+                                        <span className={`${
+                                          gameStarted && timerInfo && timerInfo.remaining <= 60 
+                                            ? 'text-red-500 font-bold' 
+                                            : 'text-gray-600'
+                                        }`}>
+                                          {gameStarted 
+                                            ? (timerInfo ? formatCountdown(timerInfo.remaining) : "Loading...") 
+                                            : formatTimeDisplay(item.timerMinutes)}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                  
+                                  {/* Edit/Delete buttons for game creator */}
+                                  {!gameStarted && (isGameCreator || isAdmin) && (
+                                    <div className="flex space-x-2">
+                                      <button 
+                                        className="p-2 rounded-full bg-gray-100 hover:bg-blue-100 text-blue-500"
+                                        onClick={() => handleEditItem(item)}
+                                        title="Edit item"
+                                      >
+                                        <FaEdit />
+                                      </button>
+                                      <button 
+                                        className="p-2 rounded-full bg-gray-100 hover:bg-red-100 text-red-500"
+                                        onClick={() => handleDeleteItem(item.id)}
+                                        title="Delete item"
+                                      >
+                                        <FaTrash />
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </li>
+                            );
+                          })}
                         </ul>
                       ) : (
                         <p className="text-center text-gray-500 py-4">No items added yet</p>
@@ -1617,63 +1918,101 @@ const GameBoard = () => {
                 {getItemDisplayText(selectedTile.item)}
               </h2>
               
-              <div className="mb-4">
-                <div className="flex justify-between items-center mb-2">
-                  <label className="block text-gray-700 font-bold" htmlFor="tileNote">
-                    Add a note:
-                  </label>
+              {/* Show timer status if applicable */}
+              {selectedTile.item && selectedTile.item.timerMinutes > 0 && (
+                <div className="mb-3 text-center">
+                  <span className={`flex items-center justify-center text-sm font-medium ${
+                    getItemTimerStatus(selectedTile.item)?.expired ? 'text-red-500' : 'text-gray-600'
+                  }`}>
+                    <FaClock className="mr-1" />
+                    {getItemTimerStatus(selectedTile.item)?.expired 
+                      ? "Time's up! This tile can no longer be claimed." 
+                      : `Time remaining: ${formatCountdown(getItemTimerStatus(selectedTile.item)?.remaining || 0)}`
+                    }
+                  </span>
                 </div>
-                <textarea
-                  id="tileNote"
-                  className="input-field min-h-[100px] w-full"
-                  placeholder="Write your note here..."
-                  value={tileNote}
-                  onChange={(e) => setTileNote(e.target.value)}
-                ></textarea>
-                
-                {/* Buttons under the text input */}
-                <div className="flex space-x-2 mt-3">
-                  <button
-                    className="bg-red-500 hover:bg-red-600 text-white font-bold rounded-full w-10 h-10 flex items-center justify-center"
-                    onClick={handleAddNote}
-                    disabled={!tileNote.trim()}
-                    title="Add note without claiming"
-                  >
-                    +
-                  </button>
-                  
-                  <motion.button
-                    className="bg-blue-500 hover:bg-blue-600 text-white rounded-full w-10 h-10 flex items-center justify-center"
-                    whileHover={{ scale: 1.03 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => handlePhotoSelect('camera')}
-                    title="Take photo"
-                  >
-                    <FaCamera />
-                  </motion.button>
-                  
-                  <motion.button
-                    className="bg-purple-500 hover:bg-purple-600 text-white rounded-full w-10 h-10 flex items-center justify-center"
-                    whileHover={{ scale: 1.03 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => handlePhotoSelect('gallery')}
-                    title="Choose from gallery"
-                  >
-                    <FaImage />
-                  </motion.button>
-                </div>
-              </div>
+              )}
               
-              <div className="flex flex-col space-y-3">
-                <motion.button
-                  className="btn-success w-full flex items-center justify-center"
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={handleClaimTile}
-                >
-                  Claim
-                </motion.button>
-              </div>
+              {/* Check if timer is expired before rendering claim controls */}
+              {(!selectedTile.item || !selectedTile.item.timerMinutes || 
+                (selectedTile.item.timerMinutes > 0 && !getItemTimerStatus(selectedTile.item)?.expired)) ? (
+                <>
+                  <div className="mb-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="block text-gray-700 font-bold" htmlFor="tileNote">
+                        Add a note:
+                      </label>
+                    </div>
+                    <textarea
+                      id="tileNote"
+                      className="input-field min-h-[100px] w-full"
+                      placeholder="Write your note here..."
+                      value={tileNote}
+                      onChange={(e) => setTileNote(e.target.value)}
+                    ></textarea>
+                    
+                    {/* Buttons under the text input */}
+                    <div className="flex space-x-2 mt-3">
+                      <button
+                        className="bg-red-500 hover:bg-red-600 text-white font-bold rounded-full w-10 h-10 flex items-center justify-center"
+                        onClick={handleAddNote}
+                        disabled={!tileNote.trim()}
+                        title="Add note without claiming"
+                      >
+                        +
+                      </button>
+                      
+                      <motion.button
+                        className="bg-blue-500 hover:bg-blue-600 text-white rounded-full w-10 h-10 flex items-center justify-center"
+                        whileHover={{ scale: 1.03 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => handlePhotoSelect('camera')}
+                        title="Take photo"
+                      >
+                        <FaCamera />
+                      </motion.button>
+                    
+                      <motion.button
+                        className="bg-purple-500 hover:bg-purple-600 text-white rounded-full w-10 h-10 flex items-center justify-center"
+                        whileHover={{ scale: 1.03 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => handlePhotoSelect('gallery')}
+                        title="Choose from gallery"
+                      >
+                        <FaImage />
+                      </motion.button>
+                    </div>
+                  </div>
+                      
+                  <div className="flex flex-col space-y-3">
+                    <motion.button
+                      className="btn-success w-full flex items-center justify-center"
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={handleClaimTile}
+                    >
+                      Claim
+                    </motion.button>
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-6">
+                  <div className="text-red-500 text-lg font-medium mb-3 text-center">
+                    This tile's time has expired
+                  </div>
+                  <p className="text-gray-600 text-center mb-4">
+                    You can no longer claim this tile because the time limit has been reached.
+                  </p>
+                  <motion.button
+                    className="btn-secondary w-full flex items-center justify-center"
+                    whileHover={{ scale: 1.03 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setSelectedTile(null)}
+                  >
+                    Close
+                  </motion.button>
+                </div>
+              )}
             </motion.div>
           </motion.div>
         )}
@@ -1695,6 +2034,82 @@ const GameBoard = () => {
                 <p>{winner} has been completed and approved!</p>
               </div>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Item Editing Modal */}
+      <AnimatePresence>
+        {editingItem && (
+          <motion.div
+            className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setEditingItem(null)}
+          >
+            <motion.div 
+              className="bg-white rounded-xl w-full max-w-md p-6 shadow-2xl"
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2 className="text-2xl font-bold mb-4 text-center text-primary">
+                Edit Item
+              </h2>
+              
+              <div className="mb-4">
+                <label className="block text-gray-700 font-bold mb-2" htmlFor="editItemInput">
+                  Item Text:
+                </label>
+                <input
+                  type="text"
+                  id="editItemInput"
+                  className="input-field w-full"
+                  value={editItemInput}
+                  onChange={(e) => setEditItemInput(e.target.value)}
+                />
+              </div>
+              
+              <div className="mb-4">
+                <label className="block text-gray-700 font-bold mb-2" htmlFor="editItemTimer">
+                  Time Limit:
+                </label>
+                <select 
+                  id="editItemTimer"
+                  className="w-full p-2 border rounded"
+                  value={selectedTimer}
+                  onChange={(e) => setSelectedTimer(parseInt(e.target.value))}
+                >
+                  {getTimerOptions().map(minutes => (
+                    <option key={minutes} value={minutes}>
+                      {formatTimeDisplay(minutes)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              <div className="flex space-x-4">
+                <motion.button
+                  className="btn-secondary flex-1"
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setEditingItem(null)}
+                >
+                  Cancel
+                </motion.button>
+                <motion.button
+                  className="btn-primary flex-1"
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleSaveEdit}
+                  disabled={!editItemInput.trim()}
+                >
+                  Save Changes
+                </motion.button>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
