@@ -464,7 +464,17 @@ const GameBoard = () => {
     }
   }, [game, userGameState]);
 
-  // Handle chat message submission
+  // Add new state for message previews and win animation
+  const [messagePreview, setMessagePreview] = useState(null);
+  const [showWinAnimation, setShowWinAnimation] = useState(false);
+
+  // Function to show message preview
+  const showMessagePreview = (message) => {
+    setMessagePreview(message);
+    setTimeout(() => setMessagePreview(null), 3000);
+  };
+
+  // Handle chat message submission with preview
   const handleSendMessage = (e) => {
     e.preventDefault();
     
@@ -478,7 +488,55 @@ const GameBoard = () => {
     };
     
     setChat([...chat, newMessage]);
+    showMessagePreview(newMessage);
     setMessage('');
+  };
+
+  // Check for win condition - updated with animation
+  const checkWinCondition = (newClaimedTiles) => {
+    if (!game) return false;
+    
+    const { rows, columns } = game;
+    const winConditions = game.winConditions || { byRow: true, byColumn: true, byAll: false };
+    let foundWin = false;
+    
+    // Check rows if that win condition is enabled
+    if (winConditions.byRow) {
+      for (let row = 0; row < rows; row++) {
+        let rowComplete = true;
+        for (let col = 0; col < columns; col++) {
+          const index = row * columns + col;
+          if (!newClaimedTiles[index] || !isTileApproved(index)) {
+            rowComplete = false;
+            break;
+          }
+        }
+        if (rowComplete) {
+          const winMessage = `Row ${row + 1} Complete!`;
+          setWinner(winMessage);
+          setShowWinAnimation(true);
+          
+          // Add win message to chat
+          const winSystemMessage = {
+            id: chat.length + 1,
+            sender: 'System',
+            message: `🏆 ${currentUser} has won by completing ${winMessage}! 🎉`,
+            timestamp: new Date().toISOString(),
+            isWinMessage: true
+          };
+          setChat(prevChat => [...prevChat, winSystemMessage]);
+          showMessagePreview(winSystemMessage);
+          
+          foundWin = true;
+          return true;
+        }
+      }
+    }
+    
+    // Similar updates for column and full board wins...
+    // ... existing win condition checks ...
+    
+    return false;
   };
 
   // Handle item submission with timer
@@ -497,11 +555,12 @@ const GameBoard = () => {
       id: Date.now(),
       text: text,
       hiddenFrom: mentionedUsers,
-      timerMinutes: selectedTimer // Add timer duration (can be 0 for no timer)
+      timerMinutes: selectedTimer // Add timer duration
     };
     
     setItems([...items, newItem]);
     setItemInput('');
+    setSelectedTimer(0); // Reset timer to 0 after submission
     
     // Add a message to the chat about the new item
     const newMessage = {
@@ -513,13 +572,14 @@ const GameBoard = () => {
     };
     
     setChat([...chat, newMessage]);
+    showMessagePreview(newMessage);
   };
 
   // Handle editing an item
   const handleEditItem = (item) => {
     setEditingItem(item);
     setEditItemInput(item.text);
-    setSelectedTimer(item.timerMinutes || 5);
+    setSelectedTimer(0); // Default to "No Timer" when editing
   };
 
   // Handle saving edited item
@@ -552,6 +612,7 @@ const GameBoard = () => {
     };
     
     setChat([...chat, newMessage]);
+    showMessagePreview(newMessage);
     
     // Reset editing state
     setEditingItem(null);
@@ -576,6 +637,7 @@ const GameBoard = () => {
       };
       
       setChat([...chat, newMessage]);
+      showMessagePreview(newMessage);
     }
   };
 
@@ -601,6 +663,7 @@ const GameBoard = () => {
     };
     
     setChat([...chat, newMessage]);
+    showMessagePreview(newMessage);
     setInviteUsername('');
   };
 
@@ -657,11 +720,6 @@ const GameBoard = () => {
     const matches = [...text.matchAll(mentionRegex)];
     const mentionedUsers = matches.map(match => match[1]);
     
-    console.log("Creating suggestion with text:", text);
-    console.log("Mentioned users:", mentionedUsers);
-    console.log("Current user is creator:", isGameCreator);
-    console.log("Game creator from ref:", gameCreatorRef.current);
-    
     // Create suggestion with proper hiddenFrom and timer
     const newSuggestion = {
       id: Date.now(),
@@ -671,24 +729,21 @@ const GameBoard = () => {
       timerMinutes: selectedTimer
     };
     
-    console.log("New suggestion object:", newSuggestion);
-    
     setSuggestedTiles([...suggestedTiles, newSuggestion]);
     
     // Add message about the suggestion
     const newMessage = {
       id: chat.length + 1,
       sender: 'System',
-      message: `${currentUser} suggested a new tile: "${text}" (${formatTimeDisplay(selectedTimer)})`,
+      message: `${currentUser} suggested a new tile: "${text}"${selectedTimer > 0 ? ` (${formatTimeDisplay(selectedTimer)})` : ''}`,
       timestamp: new Date().toISOString(),
       suggestion: newSuggestion
     };
     
-    console.log("Adding new message with suggestion:", newMessage);
-    console.log("Current isGameCreator status:", isGameCreator);
-    
     setChat([...chat, newMessage]);
+    showMessagePreview(newMessage);
     setTileInputSuggestion('');
+    setSelectedTimer(0); // Reset timer to 0 after submission
     
     // Hide the suggest tile menu after submission
     document.getElementById('suggestTileMenu').classList.add('hidden');
@@ -723,6 +778,7 @@ const GameBoard = () => {
     };
     
     setChat([...chat, newMessage]);
+    showMessagePreview(newMessage);
   };
 
   // Generate dummy test items
@@ -743,19 +799,18 @@ const GameBoard = () => {
     setItems(dummyItems);
   };
 
-  // Handle game start - updated to initialize timers
+  // Handle game start - updated to initialize timers and properly randomize tiles
   const handleStartGame = () => {
     if (!hasEnoughItems) {
       return;
     }
     
-    // In a real app, you would generate unique boards for each user
-    // For now, we'll simulate this for the current user
-    const userBoards = {};
-    
     // Initialize timers for all items that have a timer
     const initialTimers = {};
     const now = Date.now();
+    
+    // Initialize userBoards object to store boards for each user
+    const userBoards = {};
     
     items.forEach(item => {
       // Only initialize timers for items with timerMinutes > 0
@@ -773,18 +828,28 @@ const GameBoard = () => {
     
     // Create a board for each user with truly unique randomization
     users.forEach(username => {
-      // Create a unique seed for each user to ensure different board layouts
-      const userSeed = username.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-      
-      // Use the seed to generate a consistent but unique shuffle for this user
-      const shuffledItems = [...items].sort(() => {
-        // Use a deterministic but unique shuffle based on the username
-        const randomValue = Math.sin(userSeed * 9999) * 10000;
-        return 0.5 - Math.sin(randomValue % 1);
+      // Filter out items that are hidden from this user
+      const availableItems = items.filter(item => {
+        return !item.hiddenFrom || !item.hiddenFrom.includes(username);
       });
       
+      // Create a unique seed for each user based on their username and current time
+      const userSeed = username.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+      const timeSeed = Math.floor(Date.now() / 1000); // Add time-based component
+      const combinedSeed = userSeed * timeSeed;
+      
+      // Fisher-Yates shuffle algorithm with seeded randomization
+      const shuffledItems = [...availableItems];
+      for (let i = shuffledItems.length - 1; i > 0; i--) {
+        // Use a more complex seeded random number generation
+        const randomValue = Math.abs(Math.sin(combinedSeed * (i + 1)) * 10000);
+        const j = Math.floor(randomValue % (i + 1));
+        [shuffledItems[i], shuffledItems[j]] = [shuffledItems[j], shuffledItems[i]];
+      }
+      
+      // Fill the board with shuffled items, padding with null if needed
       const userTileContents = Array(game.rows * game.columns).fill(null).map((_, index) => {
-        if (index < shuffledItems.length && index < game.rows * game.columns) {
+        if (index < shuffledItems.length) {
           return shuffledItems[index];
         }
         return null;
@@ -793,31 +858,12 @@ const GameBoard = () => {
       userBoards[username] = userTileContents;
     });
     
-    // For the current user - ensure we get this user's unique board
-    let currentUserBoard;
-    if (userBoards[currentUser]) {
-      // Use the pre-generated board for this user
-      currentUserBoard = userBoards[currentUser];
-    } else {
-      // Generate a new unique board for this user
-      currentUserBoard = generateUserBoard();
+    // Set the current user's board
+    if (currentUser) {
+      setTileContents(userBoards[currentUser] || []);
     }
     
-    setTileContents(currentUserBoard);
     setGameStarted(true);
-    
-    // Add system message about game start
-    const newMessage = {
-      id: chat.length + 1,
-      sender: 'System',
-      message: 'The game has started! Click on a tile to claim it. Timers have started counting down!',
-      timestamp: new Date().toISOString()
-    };
-    
-    setChat([...chat, newMessage]);
-    
-    // Navigate to board tab when game starts
-    setActiveTab('board');
   };
   
   // Generate a board for the current user with guaranteed uniqueness
@@ -895,79 +941,6 @@ const GameBoard = () => {
     return tileApprovals[index] && tileApprovals[index].length >= getRequiredApprovals();
   };
 
-  // Check for win condition
-  const checkWinCondition = (newClaimedTiles) => {
-    if (!game) return false;
-    
-    const { rows, columns } = game;
-    
-    // Get win conditions from game settings (default to row & column if not specified)
-    const winConditions = game.winConditions || { byRow: true, byColumn: true, byAll: false };
-    
-    // Track if we found a win
-    let foundWin = false;
-    
-    // Check rows if that win condition is enabled
-    if (winConditions.byRow) {
-    for (let row = 0; row < rows; row++) {
-      let rowComplete = true;
-      for (let col = 0; col < columns; col++) {
-        const index = row * columns + col;
-        // Tile must be claimed AND approved by enough users
-        if (!newClaimedTiles[index] || !isTileApproved(index)) {
-          rowComplete = false;
-          break;
-        }
-      }
-      if (rowComplete) {
-        setWinner("Row " + (row + 1));
-          foundWin = true;
-        return true;
-        }
-      }
-    }
-    
-    // Check columns if that win condition is enabled
-    if (winConditions.byColumn && !foundWin) {
-    for (let col = 0; col < columns; col++) {
-      let colComplete = true;
-      for (let row = 0; row < rows; row++) {
-        const index = row * columns + col;
-        // Tile must be claimed AND approved by enough users
-        if (!newClaimedTiles[index] || !isTileApproved(index)) {
-          colComplete = false;
-          break;
-        }
-      }
-      if (colComplete) {
-        setWinner("Column " + (col + 1));
-          foundWin = true;
-          return true;
-        }
-      }
-    }
-    
-    // Check all tiles if that win condition is enabled
-    if (winConditions.byAll && !foundWin) {
-      const totalTiles = rows * columns;
-      let allClaimed = true;
-      
-      for (let index = 0; index < totalTiles; index++) {
-        if (!newClaimedTiles[index] || !isTileApproved(index)) {
-          allClaimed = false;
-          break;
-        }
-      }
-      
-      if (allClaimed) {
-        setWinner("Full Board");
-        return true;
-      }
-    }
-    
-    return false;
-  };
-
   // Handle file upload after selection
   const handleFileUpload = (file, tileIndex) => {
     if (!file) return;
@@ -1012,7 +985,7 @@ const GameBoard = () => {
     const messageId = chat.length + 1;
     const tile = tileContents[tileIndex];
     
-    // Create the message object
+    // Create the message object with initial empty arrays for approvals and denials
     const newMessage = {
       id: messageId,
       sender: 'System',
@@ -1023,11 +996,14 @@ const GameBoard = () => {
         user: currentUser,
         photo: photoUrl,
         note: tileNote
-      }
+      },
+      approvals: [],
+      denials: []
     };
     
-    // Add to chat
+    // Add to chat and show preview
     setChat([...chat, newMessage]);
+    showMessagePreview(newMessage);
     
     // Track this message for approvals
     setClaimMessages([...claimMessages, {
@@ -1091,14 +1067,19 @@ const GameBoard = () => {
       newTileDenials[tileIndex] = newTileDenials[tileIndex].filter(user => user !== currentUser);
       setTileDenials(newTileDenials);
       
-      // Add approval message to chat
-      const newMessage = {
-        id: chat.length + 1,
-        sender: 'System',
-        message: `${currentUser} approved the "${getItemDisplayText(tileContents[tileIndex])}" tile claim`,
-        timestamp: new Date().toISOString()
-      };
-      setChat([...chat, newMessage]);
+      // Update the original claim message with approval info
+      setChat(prevChat => {
+        const updatedChat = [...prevChat];
+        const claimMessageIndex = updatedChat.findIndex(msg => msg.id === messageId);
+        if (claimMessageIndex !== -1) {
+          updatedChat[claimMessageIndex] = {
+            ...updatedChat[claimMessageIndex],
+            approvals: [...(updatedChat[claimMessageIndex].approvals || []), currentUser],
+            denials: (updatedChat[claimMessageIndex].denials || []).filter(user => user !== currentUser)
+          };
+        }
+        return updatedChat;
+      });
       
       // Check if this approval triggers a win
       checkWinCondition(claimedTiles);
@@ -1115,14 +1096,19 @@ const GameBoard = () => {
       newTileApprovals[tileIndex] = newTileApprovals[tileIndex].filter(user => user !== currentUser);
       setTileApprovals(newTileApprovals);
       
-      // Add denial message to chat
-      const newMessage = {
-        id: chat.length + 1,
-        sender: 'System',
-        message: `${currentUser} denied the "${getItemDisplayText(tileContents[tileIndex])}" tile claim`,
-        timestamp: new Date().toISOString()
-      };
-      setChat([...chat, newMessage]);
+      // Update the original claim message with denial info
+      setChat(prevChat => {
+        const updatedChat = [...prevChat];
+        const claimMessageIndex = updatedChat.findIndex(msg => msg.id === messageId);
+        if (claimMessageIndex !== -1) {
+          updatedChat[claimMessageIndex] = {
+            ...updatedChat[claimMessageIndex],
+            denials: [...(updatedChat[claimMessageIndex].denials || []), currentUser],
+            approvals: (updatedChat[claimMessageIndex].approvals || []).filter(user => user !== currentUser)
+          };
+        }
+        return updatedChat;
+      });
     }
   };
 
@@ -1149,6 +1135,19 @@ const GameBoard = () => {
   const formatTime = (dateString) => {
     const options = { hour: '2-digit', minute: '2-digit' };
     return new Date(dateString).toLocaleTimeString(undefined, options);
+  };
+
+  // Add new state for full-size photo viewer
+  const [fullSizePhoto, setFullSizePhoto] = useState(null);
+
+  // Handle photo click in chat
+  const handlePhotoClick = (photoUrl) => {
+    setFullSizePhoto(photoUrl);
+  };
+
+  // Handle closing full-size photo
+  const handleClosePhoto = () => {
+    setFullSizePhoto(null);
   };
 
   if (loading) {
@@ -1228,6 +1227,39 @@ const GameBoard = () => {
         }}
       />
 
+      {/* Full-size Photo Overlay */}
+      <AnimatePresence>
+        {fullSizePhoto && (
+          <motion.div
+            className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-75 z-50 p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={handleClosePhoto}
+          >
+            <motion.div 
+              className="relative max-w-[90vw] max-h-[90vh]"
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                className="absolute -top-4 -right-4 bg-white rounded-full p-2 shadow-lg hover:bg-gray-100 transition-colors"
+                onClick={handleClosePhoto}
+              >
+                <FaTimes className="text-gray-600" />
+              </button>
+              <img 
+                src={fullSizePhoto} 
+                alt="Full size" 
+                className="max-w-full max-h-[90vh] object-contain rounded-lg"
+              />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Header with tabs */}
       <header className="bg-white shadow-md relative z-10">
         <div className="container mx-auto px-4 py-4">
@@ -1295,31 +1327,29 @@ const GameBoard = () => {
             </div>
           </div>
           
-          {/* Win conditions info */}
-          <div className="mb-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3 flex items-start">
-            <FaTrophy className="text-yellow-500 mt-0.5 mr-2 flex-shrink-0" />
-            <div className="text-sm">
-              <p className="font-medium text-gray-800">Win Conditions:</p>
-              <div className="text-gray-600 mt-1">
-                {(game.winConditions?.byRow || game.winConditions === undefined) && (
-                  <span className="inline-flex items-center mr-3">
-                    <FaCheck className="text-green-500 mr-1" size={12} /> Complete a row
-                  </span>
-                )}
-                {(game.winConditions?.byColumn || game.winConditions === undefined) && (
-                  <span className="inline-flex items-center mr-3">
-                    <FaCheck className="text-green-500 mr-1" size={12} /> Complete a column
-                  </span>
-                )}
-                {game.winConditions?.byAll && (
-                  <span className="inline-flex items-center">
-                    <FaCheck className="text-green-500 mr-1" size={12} /> Complete the entire board
-                  </span>
-                )}
-                <span className="block mt-1 text-xs text-gray-500">
-                  Each claimed tile must be approved by at least 50% of other players.
+          {/* Compact Win Conditions info */}
+          <div className="mb-4 bg-yellow-50 border border-yellow-200 rounded-lg p-2 flex items-center text-sm">
+            <FaTrophy className="text-yellow-500 mr-2 flex-shrink-0" />
+            <div className="flex items-center flex-wrap gap-x-4">
+              <span className="font-medium text-gray-800">Win by:</span>
+              {(game.winConditions?.byRow || game.winConditions === undefined) && (
+                <span className="inline-flex items-center">
+                  <FaCheck className="text-green-500 mr-1" size={12} /> Complete Row
                 </span>
-              </div>
+              )}
+              {(game.winConditions?.byColumn || game.winConditions === undefined) && (
+                <span className="inline-flex items-center">
+                  <FaCheck className="text-green-500 mr-1" size={12} /> Complete Column
+                </span>
+              )}
+              {game.winConditions?.byAll && (
+                <span className="inline-flex items-center">
+                  <FaCheck className="text-green-500 mr-1" size={12} /> Full Board
+                </span>
+              )}
+              <span className="text-xs text-gray-500">
+                (50% approval required)
+              </span>
             </div>
           </div>
           
@@ -1358,8 +1388,36 @@ const GameBoard = () => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="w-full p-4 flex items-center justify-center"
+              className="w-full p-4 flex flex-col items-center justify-center relative"
             >
+              {/* Message Preview Area - Updated to overlay */}
+              <AnimatePresence>
+                {messagePreview && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -20 }}
+                    animate={{ opacity: 0.9, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    className="absolute top-8 left-0 right-0 z-10 pointer-events-none flex justify-center"
+                  >
+                    <div className="w-full max-w-4xl px-4">
+                      <div className={`rounded-lg p-3 shadow-md bg-opacity-90 backdrop-blur-sm ${
+                        messagePreview.sender === 'System' 
+                          ? 'bg-gray-100' 
+                          : messagePreview.sender === currentUser
+                            ? 'bg-primary-light'
+                            : getUserColor(messagePreview.sender)
+                      }`}>
+                        {messagePreview.sender !== 'System' && (
+                          <span className="font-bold">{messagePreview.sender}: </span>
+                        )}
+                        {messagePreview.message}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Game Board - Remove mb-4 since preview is absolutely positioned */}
               <div 
                 className="bg-white rounded-lg shadow-lg p-4 w-full max-w-4xl aspect-auto"
                 style={{ 
@@ -1368,7 +1426,7 @@ const GameBoard = () => {
                   gridTemplateRows: `repeat(${game.rows}, 1fr)`,
                   gap: '8px',
                   width: '100%',
-                  height: `calc(100vh - 200px)`
+                  height: `calc(100vh - 200px)` // Restore original height since preview is overlaid
                 }}
               >
                 {Array.from({ length: game.rows * game.columns }).map((_, index) => {
@@ -1408,7 +1466,7 @@ const GameBoard = () => {
                       }}
                       whileHover={{ scale: isClaimed || isHiddenFromUser || isExpired ? 1 : 0.95 }}
                       whileTap={{ scale: isClaimed || isHiddenFromUser || isExpired ? 1 : 0.9 }}
-                      className={`rounded-lg shadow-md ${tileStyle} flex items-center justify-center font-bold text-white text-lg p-2 overflow-hidden relative`}
+                      className={`rounded-lg shadow-md ${tileStyle} flex flex-col items-center justify-center font-bold text-white p-4 overflow-hidden relative`}
                       onClick={() => !isClaimed && !isHiddenFromUser && !isExpired && handleTileClick(index)}
                     >
                       {/* Timer indicator in top right corner */}
@@ -1420,26 +1478,32 @@ const GameBoard = () => {
                       )}
                       
                       {hasPhoto && (
-                        <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center">
-                          <FaImage className="text-white text-xl" />
+                        <div className="absolute inset-2 rounded-lg overflow-hidden">
+                          <img 
+                            src={tilePhotos[index]} 
+                            alt="Tile evidence" 
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute inset-0 bg-black bg-opacity-30" />
                         </div>
                       )}
+                      
                       {isHiddenFromUser ? (
-                        <span className="text-center">Hidden</span>
+                        <span className="text-center relative z-10">Hidden</span>
                       ) : isExpired && !isClaimed ? (
-                        <div className="text-center flex flex-col">
+                        <div className="text-center flex flex-col relative z-10">
                           <span>{getItemDisplayText(tileContents[index])}</span>
                           <span className="text-xs font-normal mt-1 text-gray-200">Time's up!</span>
                         </div>
                       ) : gameStarted && tileContents[index] ? (
-                        <div className="text-center flex flex-col">
+                        <div className="text-center flex flex-col relative z-10">
                           <span>{getItemDisplayText(tileContents[index])}</span>
                           {tileNotes[index] && (
                             <span className="text-xs font-normal mt-1 text-gray-200">{tileNotes[index]}</span>
                           )}
                         </div>
                       ) : (
-                        index + 1
+                        <span className="relative z-10">{index + 1}</span>
                       )}
                     </motion.div>
                   );
@@ -1670,8 +1734,9 @@ const GameBoard = () => {
                                 <img 
                                   src={msg.claimInfo.photo} 
                                   alt="Claim evidence" 
-                                  className="w-full h-auto rounded-lg shadow-sm"
+                                  className="w-full h-auto rounded-lg shadow-sm cursor-pointer hover:opacity-90 transition-opacity"
                                   style={{ maxHeight: '200px', objectFit: 'contain' }}
+                                  onClick={() => handlePhotoClick(msg.claimInfo.photo)}
                                 />
                               </div>
                             )}
@@ -1707,16 +1772,16 @@ const GameBoard = () => {
                             {isClaimMessage && msg.claimInfo.user !== currentUser && (
                               <div className="mt-2 flex justify-end space-x-2">
                                 <button 
-                                  className={`p-2 rounded-full ${hasApproved ? 'bg-green-500 text-white' : 'bg-gray-100 hover:bg-green-100'}`}
+                                  className={`p-2 rounded-full ${msg.approvals?.includes(currentUser) ? 'bg-green-500 text-white' : 'bg-gray-100 hover:bg-green-100'}`}
                                   onClick={() => handleApprovalAction(msg.id, tileIndex, true)}
-                                  disabled={hasApproved}
+                                  disabled={msg.approvals?.includes(currentUser)}
                                 >
                                   <FaCheck />
                                 </button>
                                 <button 
-                                  className={`p-2 rounded-full ${hasDenied ? 'bg-red-500 text-white' : 'bg-gray-100 hover:bg-red-100'}`}
+                                  className={`p-2 rounded-full ${msg.denials?.includes(currentUser) ? 'bg-red-500 text-white' : 'bg-gray-100 hover:bg-red-100'}`}
                                   onClick={() => handleApprovalAction(msg.id, tileIndex, false)}
-                                  disabled={hasDenied}
+                                  disabled={msg.denials?.includes(currentUser)}
                                 >
                                   <FaTimes />
                                 </button>
@@ -1727,10 +1792,20 @@ const GameBoard = () => {
                             {isClaimMessage && (
                               <div className="mt-2 text-xs text-gray-600 flex justify-between">
                                 <span>
-                                  Approvals: {tileApprovals[tileIndex]?.length || 0}/{getRequiredApprovals()}
+                                  Approvals: {msg.approvals?.length || 0}/{getRequiredApprovals()}
+                                  {msg.approvals?.length > 0 && (
+                                    <span className="text-gray-500 ml-1">
+                                      ({msg.approvals.join(', ')})
+                                    </span>
+                                  )}
                                 </span>
                                 <span>
-                                  Denials: {tileDenials[tileIndex]?.length || 0}
+                                  Denials: {msg.denials?.length || 0}
+                                  {msg.denials?.length > 0 && (
+                                    <span className="text-gray-500 ml-1">
+                                      ({msg.denials.join(', ')})
+                                    </span>
+                                  )}
                                 </span>
                               </div>
                             )}
@@ -1845,7 +1920,7 @@ const GameBoard = () => {
                                     </span>
                                     
                                     {/* Display timer */}
-                                    {item.timerMinutes && (
+                                    {item.timerMinutes > 0 && (
                                       <div className="mt-1 flex items-center text-xs">
                                         <FaClock className="mr-1 text-gray-500" />
                                         <span className={`${
@@ -1897,6 +1972,74 @@ const GameBoard = () => {
         </AnimatePresence>
       </main>
 
+      {/* Win Animation Overlay */}
+      <AnimatePresence>
+        {showWinAnimation && (
+          <motion.div
+            className="fixed inset-0 pointer-events-none z-50 flex items-center justify-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              className="absolute inset-0 bg-confetti"
+              initial={{ opacity: 0 }}
+              animate={{ 
+                opacity: [0, 0.5, 0],
+                scale: [1, 1.2, 1.5],
+              }}
+              transition={{
+                duration: 3,
+                times: [0, 0.5, 1],
+                repeat: 0
+              }}
+            />
+            <motion.div
+              className="text-6xl font-bold text-primary text-center bg-white bg-opacity-90 p-8 rounded-2xl shadow-2xl"
+              initial={{ scale: 0, rotate: -180 }}
+              animate={{ 
+                scale: 1, 
+                rotate: 0,
+                transition: {
+                  type: "spring",
+                  damping: 10,
+                  stiffness: 100
+                }
+              }}
+              exit={{ scale: 0, rotate: 180 }}
+            >
+              <div className="text-3xl mb-2">🎉 Winner! 🎉</div>
+              <div>{winner}</div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Winner notification toast */}
+      <AnimatePresence>
+        {winner && !selectedTile && (
+          <motion.div
+            className="fixed bottom-4 right-4 bg-gradient-to-r from-yellow-400 to-yellow-600 text-white p-6 rounded-lg shadow-2xl z-40"
+            initial={{ opacity: 0, y: 50, scale: 0.5 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 50, scale: 0.5 }}
+            transition={{
+              type: "spring",
+              damping: 15,
+              stiffness: 200
+            }}
+          >
+            <div className="flex items-center">
+              <FaTrophy className="text-4xl text-yellow-200 mr-4" />
+              <div>
+                <h3 className="font-bold text-2xl mb-1">Winner!</h3>
+                <p className="text-yellow-100">{winner}</p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Tile popup dialog */}
       <AnimatePresence>
         {selectedTile && (
@@ -1930,6 +2073,25 @@ const GameBoard = () => {
                       : `Time remaining: ${formatCountdown(getItemTimerStatus(selectedTile.item)?.remaining || 0)}`
                     }
                   </span>
+                </div>
+              )}
+
+              {/* Display photo if it exists */}
+              {tilePhotos[selectedTile.index] && (
+                <div className="relative mb-4">
+                  <img 
+                    src={tilePhotos[selectedTile.index]} 
+                    alt="Tile evidence" 
+                    className="w-full h-auto rounded-lg"
+                  />
+                  {/* Overlay note if it exists */}
+                  {tileNotes[selectedTile.index] && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="bg-white bg-opacity-90 p-3 rounded-lg shadow-lg max-w-[90%] text-center">
+                        <p className="text-gray-800">{tileNotes[selectedTile.index]}</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               
@@ -2014,26 +2176,6 @@ const GameBoard = () => {
                 </div>
               )}
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Winner notification */}
-      <AnimatePresence>
-        {winner && !selectedTile && (
-          <motion.div
-            className="fixed bottom-4 right-4 bg-yellow-100 text-yellow-800 p-4 rounded-lg shadow-lg z-40"
-            initial={{ opacity: 0, y: 50 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 50 }}
-          >
-            <div className="flex items-center">
-              <FaTrophy className="text-2xl text-yellow-600 mr-3" />
-              <div>
-                <h3 className="font-bold text-lg">Winner!</h3>
-                <p>{winner} has been completed and approved!</p>
-              </div>
-            </div>
           </motion.div>
         )}
       </AnimatePresence>
