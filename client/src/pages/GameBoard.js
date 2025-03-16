@@ -710,36 +710,66 @@ const GameBoard = () => {
     
     const { rows, columns } = game;
     
-    // Check rows
-    for (let row = 0; row < rows; row++) {
-      let rowComplete = true;
-      for (let col = 0; col < columns; col++) {
-        const index = row * columns + col;
-        // Tile must be claimed AND approved by enough users
-        if (!newClaimedTiles[index] || !isTileApproved(index)) {
-          rowComplete = false;
-          break;
+    // Get win conditions from game settings (default to row & column if not specified)
+    const winConditions = game.winConditions || { byRow: true, byColumn: true, byAll: false };
+    
+    // Track if we found a win
+    let foundWin = false;
+    
+    // Check rows if that win condition is enabled
+    if (winConditions.byRow) {
+      for (let row = 0; row < rows; row++) {
+        let rowComplete = true;
+        for (let col = 0; col < columns; col++) {
+          const index = row * columns + col;
+          // Tile must be claimed AND approved by enough users
+          if (!newClaimedTiles[index] || !isTileApproved(index)) {
+            rowComplete = false;
+            break;
+          }
         }
-      }
-      if (rowComplete) {
-        setWinner("Row " + (row + 1));
-        return true;
+        if (rowComplete) {
+          setWinner("Row " + (row + 1));
+          foundWin = true;
+          return true;
+        }
       }
     }
     
-    // Check columns
-    for (let col = 0; col < columns; col++) {
-      let colComplete = true;
-      for (let row = 0; row < rows; row++) {
-        const index = row * columns + col;
-        // Tile must be claimed AND approved by enough users
+    // Check columns if that win condition is enabled
+    if (winConditions.byColumn && !foundWin) {
+      for (let col = 0; col < columns; col++) {
+        let colComplete = true;
+        for (let row = 0; row < rows; row++) {
+          const index = row * columns + col;
+          // Tile must be claimed AND approved by enough users
+          if (!newClaimedTiles[index] || !isTileApproved(index)) {
+            colComplete = false;
+            break;
+          }
+        }
+        if (colComplete) {
+          setWinner("Column " + (col + 1));
+          foundWin = true;
+          return true;
+        }
+      }
+    }
+    
+    // Check all tiles if that win condition is enabled
+    if (winConditions.byAll && !foundWin) {
+      const totalTiles = rows * columns;
+      let allClaimed = true;
+      
+      for (let index = 0; index < totalTiles; index++) {
         if (!newClaimedTiles[index] || !isTileApproved(index)) {
-          colComplete = false;
+          allClaimed = false;
           break;
         }
       }
-      if (colComplete) {
-        setWinner("Column " + (col + 1));
+      
+      if (allClaimed) {
+        setWinner("Full Board");
         return true;
       }
     }
@@ -1060,6 +1090,34 @@ const GameBoard = () => {
                   <FaCog />
                 </button>
               )}
+            </div>
+          </div>
+          
+          {/* Win conditions info */}
+          <div className="mb-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3 flex items-start">
+            <FaTrophy className="text-yellow-500 mt-0.5 mr-2 flex-shrink-0" />
+            <div className="text-sm">
+              <p className="font-medium text-gray-800">Win Conditions:</p>
+              <div className="text-gray-600 mt-1">
+                {(game.winConditions?.byRow || game.winConditions === undefined) && (
+                  <span className="inline-flex items-center mr-3">
+                    <FaCheck className="text-green-500 mr-1" size={12} /> Complete a row
+                  </span>
+                )}
+                {(game.winConditions?.byColumn || game.winConditions === undefined) && (
+                  <span className="inline-flex items-center mr-3">
+                    <FaCheck className="text-green-500 mr-1" size={12} /> Complete a column
+                  </span>
+                )}
+                {game.winConditions?.byAll && (
+                  <span className="inline-flex items-center">
+                    <FaCheck className="text-green-500 mr-1" size={12} /> Complete the entire board
+                  </span>
+                )}
+                <span className="block mt-1 text-xs text-gray-500">
+                  Each claimed tile must be approved by at least 50% of other players.
+                </span>
+              </div>
             </div>
           </div>
           
