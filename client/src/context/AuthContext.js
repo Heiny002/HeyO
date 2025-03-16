@@ -3,16 +3,63 @@ import axios from 'axios';
 
 export const AuthContext = createContext();
 
+// Define mock users for simulation
+const mockUsers = [
+  {
+    id: 1,
+    username: 'JHarvey',
+    email: 'jharvey@example.com',
+    avatar: 'https://i.pravatar.cc/150?img=11',
+    isAdmin: true
+  },
+  {
+    id: 2,
+    username: 'Taylor',
+    email: 'taylor@example.com',
+    avatar: 'https://i.pravatar.cc/150?img=5',
+    isAdmin: false
+  },
+  {
+    id: 3,
+    username: 'Alex',
+    email: 'alex@example.com',
+    avatar: 'https://i.pravatar.cc/150?img=3',
+    isAdmin: false
+  },
+  {
+    id: 4,
+    username: 'Jordan',
+    email: 'jordan@example.com',
+    avatar: 'https://i.pravatar.cc/150?img=7',
+    isAdmin: false
+  }
+];
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isSimulatedUser, setIsSimulatedUser] = useState(false);
+  const [allUsers] = useState(mockUsers);
 
   useEffect(() => {
     // Check if user is logged in on app load
     const checkAuthStatus = async () => {
       const token = localStorage.getItem('token');
+      const simulatedUserId = localStorage.getItem('simulatedUserId');
+      
+      if (simulatedUserId) {
+        // Load simulated user
+        const simulatedUser = mockUsers.find(u => u.id === parseInt(simulatedUserId));
+        if (simulatedUser) {
+          setUser(simulatedUser);
+          setIsAuthenticated(true);
+          setIsSimulatedUser(true);
+          setIsLoading(false);
+          return;
+        }
+      }
       
       if (token) {
         try {
@@ -34,6 +81,18 @@ export const AuthProvider = ({ children }) => {
 
     checkAuthStatus();
   }, []);
+
+  // Switch to simulate a different user
+  const switchUser = (userId) => {
+    const selectedUser = mockUsers.find(u => u.id === userId);
+    
+    if (selectedUser) {
+      setUser(selectedUser);
+      setIsAuthenticated(true);
+      setIsSimulatedUser(true);
+      localStorage.setItem('simulatedUserId', userId.toString());
+    }
+  };
 
   // Register user
   const register = async (userData) => {
@@ -64,6 +123,19 @@ export const AuthProvider = ({ children }) => {
     setIsLoading(true);
     
     try {
+      // For demo purposes, allow login with any mock user credentials
+      const mockUser = mockUsers.find(u => 
+        u.email === userData.email || u.username === userData.email
+      );
+      
+      if (mockUser && userData.password === 'password') {
+        // Simulate successful login with mock user
+        setUser(mockUser);
+        setIsAuthenticated(true);
+        setIsLoading(false);
+        return true;
+      }
+      
       const res = await axios.post('/api/login', userData);
       
       localStorage.setItem('token', res.data.token);
@@ -84,10 +156,12 @@ export const AuthProvider = ({ children }) => {
   // Logout user
   const logout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('simulatedUserId');
     delete axios.defaults.headers.common['Authorization'];
     
     setUser(null);
     setIsAuthenticated(false);
+    setIsSimulatedUser(false);
   };
 
   // Clear error
@@ -102,10 +176,13 @@ export const AuthProvider = ({ children }) => {
         isAuthenticated,
         isLoading,
         error,
+        isSimulatedUser,
+        allUsers,
         login,
         register,
         logout,
-        clearError
+        clearError,
+        switchUser
       }}
     >
       {children}

@@ -1,12 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useContext } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FaArrowLeft, FaComments, FaGamepad, FaPlus, FaPlay, FaCog, FaCamera, FaImage, FaTrophy, FaCheck, FaTimes, FaComment, FaEnvelope, FaCopy, FaShareAlt } from 'react-icons/fa';
+import { AuthContext } from '../context/AuthContext';
 
 const GameBoard = () => {
   const { id } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useContext(AuthContext);
   const [game, setGame] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('board');
@@ -45,11 +47,14 @@ const GameBoard = () => {
   const [tileNotes, setTileNotes] = useState([]); // Store notes for each tile
   const [winner, setWinner] = useState(null);
   // eslint-disable-next-line no-unused-vars
-  const [users, setUsers] = useState(['JHarvey', 'User2', 'User3', 'User4']); // Simulated users for testing
-  const currentUser = 'You'; // In a real app, this would come from an auth context
+  const [users, setUsers] = useState(['JHarvey', 'Taylor', 'Alex', 'Jordan']); // Simulated users
+  const currentUser = user?.username || 'You'; // Get username from AuthContext
   
   // For handling claims waiting for approval
   const [claimMessages, setClaimMessages] = useState([]);
+
+  // User-specific game state - maintained in localStorage
+  const [userGameState, setUserGameState] = useState({});
 
   // Calculate minimum required items
   const calculateMinItems = (rows, columns) => {
@@ -87,17 +92,67 @@ const GameBoard = () => {
     }
   }, [id, location.state]);
 
+  // Load user-specific game state from localStorage
+  useEffect(() => {
+    if (game && user) {
+      const storageKey = `game_${game.id}_user_${user.id}`;
+      const savedState = localStorage.getItem(storageKey);
+      
+      if (savedState) {
+        try {
+          const parsedState = JSON.parse(savedState);
+          setUserGameState(parsedState);
+          
+          // Apply user-specific state if it exists
+          if (parsedState.tileContents) setTileContents(parsedState.tileContents);
+          if (parsedState.claimedTiles) setClaimedTiles(parsedState.claimedTiles);
+          if (parsedState.tilePhotos) setTilePhotos(parsedState.tilePhotos);
+          if (parsedState.tileApprovals) setTileApprovals(parsedState.tileApprovals);
+          if (parsedState.tileDenials) setTileDenials(parsedState.tileDenials);
+          if (parsedState.tileNotes) setTileNotes(parsedState.tileNotes);
+          if (parsedState.gameStarted) setGameStarted(parsedState.gameStarted);
+          
+          // Don't override chat with user-specific chat to maintain shared chat experience
+        } catch (e) {
+          console.error("Error parsing saved game state", e);
+        }
+      }
+    }
+  }, [game, user]);
+
+  // Save user-specific game state to localStorage when it changes
+  useEffect(() => {
+    if (game && user && gameStarted) {
+      const storageKey = `game_${game.id}_user_${user.id}`;
+      const stateToSave = {
+        tileContents,
+        claimedTiles,
+        tilePhotos,
+        tileApprovals,
+        tileDenials,
+        tileNotes,
+        gameStarted
+      };
+      
+      localStorage.setItem(storageKey, JSON.stringify(stateToSave));
+    }
+  }, [game, user, tileContents, claimedTiles, tilePhotos, tileApprovals, tileDenials, tileNotes, gameStarted]);
+
   // Initialize arrays when game loads or changes
   useEffect(() => {
     if (game) {
       const totalTiles = game.rows * game.columns;
-      setClaimedTiles(Array(totalTiles).fill(false));
-      setTilePhotos(Array(totalTiles).fill(null));
-      setTileApprovals(Array(totalTiles).fill([]));
-      setTileDenials(Array(totalTiles).fill([]));
-      setTileNotes(Array(totalTiles).fill(null));
+      
+      // Only initialize if we don't have user-specific data loaded
+      if (!userGameState.claimedTiles) {
+        setClaimedTiles(Array(totalTiles).fill(false));
+        setTilePhotos(Array(totalTiles).fill(null));
+        setTileApprovals(Array(totalTiles).fill([]));
+        setTileDenials(Array(totalTiles).fill([]));
+        setTileNotes(Array(totalTiles).fill(null));
+      }
     }
-  }, [game]);
+  }, [game, userGameState]);
 
   // Handle chat message submission
   const handleSendMessage = (e) => {
@@ -346,8 +401,12 @@ const GameBoard = () => {
   
   // Generate a board for the current user
   const generateUserBoard = () => {
-    // Assign random items to tiles
-    const shuffledItems = [...items].sort(() => Math.random() - 0.5);
+    // Assign random items to tiles with a seed based on user ID for consistency
+    const shuffledItems = [...items].sort(() => {
+      // Use a deterministic shuffle based on user ID
+      return 0.5 - Math.sin(user?.id || 0);
+    });
+    
     return Array(game.rows * game.columns).fill(null).map((_, index) => {
       if (index < shuffledItems.length && index < game.rows * game.columns) {
         return shuffledItems[index];

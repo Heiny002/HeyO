@@ -12,34 +12,80 @@ const Games = () => {
   const [gamesLoading, setGamesLoading] = useState(true);
   const [invitesLoading, setInvitesLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('current');
-  const [unreadMessages, setUnreadMessages] = useState(2); // For demonstration
-  const [unviewedInvites, setUnviewedInvites] = useState(3); // For demonstration
+  const [unreadMessages, setUnreadMessages] = useState(0);
+  const [unviewedInvites, setUnviewedInvites] = useState(0);
 
-  // Placeholder for fetching current games - in a real app, this would call an API
+  // Placeholder for fetching current games - user-specific
   useEffect(() => {
+    if (!user) return;
+    
     // Simulating API call with timeout
     const timer = setTimeout(() => {
-      // Example games data
-      const exampleGames = [
-        {
-          id: 'game1',
-          name: 'My First Board',
-          createdAt: new Date().toISOString(),
-          rows: 4,
-          columns: 3,
-          createdBy: user?.username || 'Anonymous',
-          hasUnreadMessages: true
-        },
-        {
+      // Example games data - customized per user
+      const exampleGames = [];
+      
+      // Common game for all users
+      exampleGames.push({
+        id: 'game1',
+        name: 'Weekly Challenge',
+        createdAt: new Date().toISOString(),
+        rows: 4,
+        columns: 3,
+        createdBy: 'JHarvey',
+        hasUnreadMessages: true,
+        players: ['JHarvey', 'Taylor', 'Alex', 'Jordan']
+      });
+      
+      // User-specific games
+      if (user.username === 'JHarvey') {
+        exampleGames.push({
           id: 'game2',
-          name: 'Challenge Board',
+          name: 'JHarvey\'s Board',
           createdAt: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
           rows: 5,
           columns: 4,
           createdBy: 'JHarvey',
-          hasUnreadMessages: true
-        }
-      ];
+          hasUnreadMessages: false,
+          players: ['JHarvey', 'Taylor']
+        });
+      } else if (user.username === 'Taylor') {
+        exampleGames.push({
+          id: 'game3',
+          name: 'Taylor\'s Fun Game',
+          createdAt: new Date(Date.now() - 43200000).toISOString(), // 12 hours ago
+          rows: 3,
+          columns: 3,
+          createdBy: 'Taylor',
+          hasUnreadMessages: true,
+          players: ['Taylor', 'Alex', 'Jordan']
+        });
+      } else if (user.username === 'Alex') {
+        exampleGames.push({
+          id: 'game4',
+          name: 'Alex\'s Challenge',
+          createdAt: new Date(Date.now() - 129600000).toISOString(), // 36 hours ago
+          rows: 4,
+          columns: 4,
+          createdBy: 'Alex',
+          hasUnreadMessages: false,
+          players: ['Alex', 'JHarvey']
+        });
+      } else if (user.username === 'Jordan') {
+        exampleGames.push({
+          id: 'game5',
+          name: 'Jordan\'s Party',
+          createdAt: new Date(Date.now() - 172800000).toISOString(), // 48 hours ago
+          rows: 5,
+          columns: 5,
+          createdBy: 'Jordan',
+          hasUnreadMessages: true,
+          players: ['Jordan', 'Taylor', 'JHarvey']
+        });
+      }
+      
+      // Count unread messages
+      const unreadCount = exampleGames.filter(game => game.hasUnreadMessages).length;
+      setUnreadMessages(unreadCount);
       
       setCurrentGames(exampleGames);
       setGamesLoading(false);
@@ -48,53 +94,79 @@ const Games = () => {
     return () => clearTimeout(timer);
   }, [user]);
 
-  // Placeholder for fetching pending invites - in a real app, this would call an API
+  // Placeholder for fetching pending invites - user-specific
   useEffect(() => {
+    if (!user) return;
+    
     // Simulating API call with timeout
     const timer = setTimeout(() => {
-      // Example pending invites data
-      const exampleInvites = [
-        {
+      // Example pending invites data - customized per user
+      const exampleInvites = [];
+      
+      // Common invite for JHarvey and Taylor
+      if (['JHarvey', 'Taylor'].includes(user.username)) {
+        exampleInvites.push({
           id: 'invite1',
-          gameId: 'game3',
-          name: 'Friday Fun Board',
+          gameId: 'game6',
+          name: 'Weekend Party Board',
           createdAt: new Date().toISOString(),
           rows: 5,
           columns: 5,
-          createdBy: 'JHarvey',
-          players: ['JHarvey', 'User2', 'User3'],
+          createdBy: 'Alex',
+          players: ['Alex', 'Jordan'],
           viewed: false
-        },
-        {
+        });
+      }
+      
+      // User-specific invites
+      if (user.username === 'JHarvey') {
+        exampleInvites.push({
           id: 'invite2',
-          gameId: 'game4',
-          name: 'Weekend Challenge',
+          gameId: 'game7',
+          name: 'Taylor\'s Challenge',
           createdAt: new Date(Date.now() - 43200000).toISOString(), // 12 hours ago
           rows: 3,
           columns: 3,
-          createdBy: 'User2',
-          players: ['User2', 'User3'],
+          createdBy: 'Taylor',
+          players: ['Taylor', 'Alex'],
           viewed: false
-        },
-        {
+        });
+      } else if (user.username === 'Taylor') {
+        exampleInvites.push({
           id: 'invite3',
-          gameId: 'game5',
-          name: 'Family Game Night',
-          createdAt: new Date(Date.now() - 129600000).toISOString(), // 36 hours ago
+          gameId: 'game8',
+          name: 'JHarvey\'s Fun Night',
+          createdAt: new Date(Date.now() - 64800000).toISOString(), // 18 hours ago
           rows: 4,
           columns: 4,
-          createdBy: 'User3',
-          players: ['User3', 'User4', 'JHarvey'],
+          createdBy: 'JHarvey',
+          players: ['JHarvey', 'Jordan'],
           viewed: true
-        }
-      ];
+        });
+      } else if (user.username === 'Alex' || user.username === 'Jordan') {
+        exampleInvites.push({
+          id: 'invite4',
+          gameId: 'game9',
+          name: 'Friday Fun Board',
+          createdAt: new Date(Date.now() - 21600000).toISOString(), // 6 hours ago
+          rows: 4,
+          columns: 4,
+          createdBy: 'JHarvey',
+          players: ['JHarvey'],
+          viewed: false
+        });
+      }
+      
+      // Count unviewed invites
+      const unviewedCount = exampleInvites.filter(invite => !invite.viewed).length;
+      setUnviewedInvites(unviewedCount);
       
       setPendingInvites(exampleInvites);
       setInvitesLoading(false);
     }, 1200);
     
     return () => clearTimeout(timer);
-  }, []);
+  }, [user]);
 
   // List of games (placeholders for now)
   const gamesList = [
@@ -321,6 +393,9 @@ const Games = () => {
                   </div>
                   <div className="mt-2 text-sm text-gray-600">
                     <span>Grid: {game.rows} x {game.columns}</span>
+                  </div>
+                  <div className="mt-2 text-sm text-gray-600">
+                    <span>Players: {game.players?.join(', ') || 'None'}</span>
                   </div>
                 </motion.div>
               ))}
