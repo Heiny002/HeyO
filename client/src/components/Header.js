@@ -9,6 +9,19 @@ const Header = () => {
   const navigate = useNavigate();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const menuRef = useRef(null);
+  const buttonRef = useRef(null);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, right: 0 });
+  
+  // Update menu position when button is clicked
+  useEffect(() => {
+    if (showUserMenu && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setMenuPosition({
+        top: rect.bottom + window.scrollY,
+        right: window.innerWidth - rect.right
+      });
+    }
+  }, [showUserMenu]);
   
   const handleLogout = () => {
     logout();
@@ -28,7 +41,8 @@ const Header = () => {
   // Close menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
+      if (menuRef.current && !menuRef.current.contains(event.target) && 
+          buttonRef.current && !buttonRef.current.contains(event.target)) {
         setShowUserMenu(false);
       }
     };
@@ -39,7 +53,7 @@ const Header = () => {
   
   return (
     <motion.header 
-      className="bg-white shadow-md py-4 rainbow-border relative z-20"
+      className="bg-white shadow-md py-4 rainbow-border relative z-20 overflow-visible"
       initial={{ y: -50, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.5 }}
@@ -57,8 +71,9 @@ const Header = () => {
         
         <div className="flex items-center gap-4">
           {/* User Simulator - Available on all pages */}
-          <div className="relative" ref={menuRef}>
+          <div className="relative">
             <motion.button
+              ref={buttonRef}
               className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors shadow-sm"
               onClick={() => setShowUserMenu(!showUserMenu)}
               whileHover={{ scale: 1.05 }}
@@ -90,11 +105,17 @@ const Header = () => {
             <AnimatePresence>
               {showUserMenu && (
                 <motion.div
+                  ref={menuRef}
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg overflow-hidden z-50"
-                  style={{ maxHeight: '90vh', overflowY: 'auto' }}
+                  className="fixed w-64 bg-white rounded-lg shadow-lg overflow-hidden z-50"
+                  style={{ 
+                    maxHeight: '80vh', 
+                    overflowY: 'auto',
+                    top: `${menuPosition.top}px`,
+                    right: `${menuPosition.right}px`
+                  }}
                 >
                   <div className="p-3 bg-gray-50 border-b border-gray-200">
                     <h3 className="text-sm font-semibold text-gray-700">Simulating Users</h3>
