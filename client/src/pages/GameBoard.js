@@ -60,6 +60,16 @@ const GameBoard = () => {
   const [isGameCreator, setIsGameCreator] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
 
+  // Add a reference to store the createdBy value for debugging
+  const gameCreatorRef = useRef(null);
+
+  // Keep track of whether this is a new game being created
+  const isNewGameRef = useRef(id === 'new' || !id);
+  
+  // Add an immutable property for the original creator of the game
+  // This will be set ONCE during game creation and never changed
+  const [originalCreator, setOriginalCreator] = useState(null);
+
   // Calculate minimum required items
   const calculateMinItems = (rows, columns) => {
     const totalTiles = rows * columns;
@@ -68,18 +78,116 @@ const GameBoard = () => {
 
   // On component mount, get game data
   useEffect(() => {
+    console.log("Component mounting with Current user:", currentUser, "User object:", user);
+    console.log("Game ID:", id, "Is new game:", isNewGameRef.current);
+    
+    // Check if the original creator is already stored for this game
+    const storedOriginalCreator = localStorage.getItem(`original_creator_${id}`);
+    
+    // If this is a new game, the current user is automatically the creator
+    if (isNewGameRef.current) {
+      console.log("NEW GAME: Setting current user as creator:", currentUser);
+      setIsGameCreator(true);
+      gameCreatorRef.current = currentUser;
+      
+      // Set the original creator - this is permanent and immutable
+      if (!storedOriginalCreator) {
+        console.log("Setting ORIGINAL CREATOR to:", currentUser);
+        localStorage.setItem(`original_creator_${id || 'new'}`, currentUser);
+        setOriginalCreator(currentUser);
+      } else {
+        console.log("Game already has original creator:", storedOriginalCreator);
+        setOriginalCreator(storedOriginalCreator);
+      }
+      
+      // In a real app, you would save this to the backend
+      localStorage.setItem(`game_creator_${id || 'new'}`, currentUser);
+    } else if (storedOriginalCreator) {
+      // If the game exists and has an original creator, use that
+      console.log("Found original creator in storage:", storedOriginalCreator);
+      setOriginalCreator(storedOriginalCreator);
+      
+      // Only set isGameCreator to true if the current user is the original creator
+      setIsGameCreator(currentUser === storedOriginalCreator);
+    }
+    
     if (location.state?.game) {
       // If we have game data from navigation state, use it
-      setGame(location.state.game);
+      const gameData = location.state.game;
+      
+      // If the game doesn't have an originalCreator field, add it from localStorage or set it to current user
+      if (!gameData.originalCreator) {
+        const creator = storedOriginalCreator || currentUser;
+        const updatedGame = {
+          ...gameData,
+          originalCreator: creator
+        };
+        setGame(updatedGame);
+        setOriginalCreator(creator);
+        
+        // Save the original creator to localStorage
+        if (!storedOriginalCreator) {
+          localStorage.setItem(`original_creator_${id}`, creator);
+        }
+      } else {
+        // Game already has originalCreator field
+        setGame(gameData);
+        setOriginalCreator(gameData.originalCreator);
+      }
+      
+      // CRITICAL FIX: Only assign creator if the game truly has no creator
+      // This prevents reassigning creator when switching users
+      if (!location.state.game.createdBy) {
+        console.log("Game has no creator, setting to original creator or current user");
+        
+        // Use original creator if available, otherwise current user
+        const gameCreator = storedOriginalCreator || currentUser;
+        console.log("Assigning creator from storage or current user:", gameCreator);
+        
+        const updatedGame = {
+          ...location.state.game,
+          createdBy: gameCreator,
+          originalCreator: gameCreator
+        };
+        
+        setGame(updatedGame);
+        gameCreatorRef.current = gameCreator;
+        setOriginalCreator(gameCreator);
+        
+        // Only set as creator if it's actually this user
+        if (gameCreator === currentUser) {
+          setIsGameCreator(true);
+        }
+      } else {
+        // Store creator info in ref for debugging
+        console.log("Game already has creator:", location.state.game.createdBy);
+        gameCreatorRef.current = location.state.game.createdBy;
+        
+        // Store the creator permanently
+        localStorage.setItem(`game_creator_${id}`, location.state.game.createdBy);
+      }
       
       // Set the active tab if provided in the state
       if (location.state.activeTab) {
         setActiveTab(location.state.activeTab);
       }
       
-      // Check if current user is the game creator
-      if (location.state.game.createdBy === currentUser) {
+      console.log("Game creator check:", location.state.game.createdBy, "Current user:", currentUser);
+      console.log("Original creator check:", originalCreator, "Current user:", currentUser);
+      
+      // Check if current user is the original creator of the game
+      if (originalCreator === currentUser) {
+        console.log("SUCCESS: Current user is the original creator");
         setIsGameCreator(true);
+      } else if (location.state.game.createdBy === currentUser) {
+        console.log("WARNING: Current user listed as creator but not original creator");
+      } else {
+        console.log("MISMATCH: createdBy:", location.state.game.createdBy, "currentUser:", currentUser);
+        console.log("MISMATCH: originalCreator:", originalCreator, "currentUser:", currentUser);
+        
+        // Explicitly set NOT the creator
+        console.log("CONFIRMED: Current user is NOT the creator");
+        setIsGameCreator(false);
       }
       
       // Check if current user is an admin
@@ -89,23 +197,72 @@ const GameBoard = () => {
       
       setLoading(false);
     } else {
+      // Check if we have stored the creator in localStorage
+      const storedCreator = localStorage.getItem(`game_creator_${id}`);
+      if (storedCreator) {
+        console.log("Found stored creator:", storedCreator, "Current user:", currentUser);
+        gameCreatorRef.current = storedCreator;
+        if (storedCreator === currentUser) {
+          console.log("MATCH: Setting isGameCreator to true from localStorage");
+          setIsGameCreator(true);
+        } else {
+          // Explicitly set NOT the creator
+          console.log("CONFIRMED: Current user is NOT the creator");
+          setIsGameCreator(false);
+        }
+      }
+    
       // In a real app, you would fetch the game data from an API
       // For now, we'll just simulate a loading state
       setTimeout(() => {
+        // Check localStorage first to see if we already know about this game
+        const storedCreator = localStorage.getItem(`game_creator_${id}`);
+        const storedOriginalCreator = localStorage.getItem(`original_creator_${id}`);
+        
         // Example fallback game data
         const newGame = {
-          id,
+          id: id || 'new-game-' + Date.now(),
           name: 'Example Board',
           rows: 4,
           columns: 3,
           createdAt: new Date().toISOString(),
-          createdBy: 'JHarvey'
+          // Use stored creator first if available, otherwise current user
+          createdBy: storedCreator || currentUser,
+          // Use stored original creator if available or set to current user for new games
+          originalCreator: storedOriginalCreator || currentUser
         };
+        
+        // Store creator info in ref for debugging
+        gameCreatorRef.current = newGame.createdBy;
+        setOriginalCreator(newGame.originalCreator);
+        
+        // Only save creator to localStorage if we don't already have one
+        if (!storedCreator) {
+          localStorage.setItem(`game_creator_${newGame.id}`, newGame.createdBy);
+        }
+        
+        // Save original creator if not set yet
+        if (!storedOriginalCreator) {
+          localStorage.setItem(`original_creator_${newGame.id}`, newGame.originalCreator);
+        }
+        
         setGame(newGame);
         
-        // Check if current user is the game creator
-        if (newGame.createdBy === currentUser) {
+        console.log("Fallback game creator check:", newGame.createdBy, "Current user:", currentUser);
+        console.log("Fallback original creator check:", newGame.originalCreator, "Current user:", currentUser);
+        
+        // Check if current user is the original creator
+        if (newGame.originalCreator === currentUser) {
+          console.log("SUCCESS: Current user is the original creator");
           setIsGameCreator(true);
+        } else if (newGame.createdBy === currentUser) {
+          console.log("WARNING: Current user listed as creator but not original creator");
+          // Don't set isGameCreator to true if not the original creator
+          setIsGameCreator(false);
+        } else {
+          console.log("MISMATCH: createdBy:", newGame.createdBy, "currentUser:", currentUser);
+          // Explicitly set NOT the creator
+          setIsGameCreator(false);
         }
         
         // Check if current user is an admin
@@ -116,7 +273,36 @@ const GameBoard = () => {
         setLoading(false);
       }, 1000);
     }
-  }, [id, location.state, currentUser, user]);
+  }, [id, location.state, currentUser, user, originalCreator]);
+
+  // Add a new useEffect to handle route changes that might indicate game creation steps
+  useEffect(() => {
+    // Check if we already have a stored creator for this game
+    const storedCreator = localStorage.getItem(`game_creator_${id || 'new'}`);
+    const storedOriginalCreator = localStorage.getItem(`original_creator_${id || 'new'}`);
+    
+    // If the URL contains "board-builder" or "set-tiles", mark this as a new game being created
+    // BUT only if we don't already have a creator stored (prevents overwriting)
+    if (!storedOriginalCreator && (window.location.pathname.includes('board-builder') || 
+        window.location.pathname.includes('set-tiles'))) {
+      console.log("Detected board builder / set tiles - marking as new game");
+      isNewGameRef.current = true;
+      setIsGameCreator(true);
+      gameCreatorRef.current = currentUser;
+      
+      // Store this information for persistence
+      localStorage.setItem(`game_creator_${id || 'new'}`, currentUser);
+      
+      // Set and store the ORIGINAL creator - this value will never change
+      localStorage.setItem(`original_creator_${id || 'new'}`, currentUser);
+      setOriginalCreator(currentUser);
+    } else if (storedOriginalCreator) {
+      // If we have a stored original creator, use that to determine if user is the creator
+      console.log("Found existing original creator for this game:", storedOriginalCreator);
+      setOriginalCreator(storedOriginalCreator);
+      setIsGameCreator(storedOriginalCreator === currentUser);
+    }
+  }, [id, currentUser]);
 
   // Load user-specific game state from localStorage
   useEffect(() => {
@@ -308,6 +494,11 @@ const GameBoard = () => {
     const matches = [...text.matchAll(mentionRegex)];
     const mentionedUsers = matches.map(match => match[1]);
     
+    console.log("Creating suggestion with text:", text);
+    console.log("Mentioned users:", mentionedUsers);
+    console.log("Current user is creator:", isGameCreator);
+    console.log("Game creator from ref:", gameCreatorRef.current);
+    
     // Create suggestion with proper hiddenFrom
     const newSuggestion = {
       id: Date.now(),
@@ -315,6 +506,8 @@ const GameBoard = () => {
       suggestedBy: currentUser,
       hiddenFrom: mentionedUsers.length > 0 ? mentionedUsers : undefined
     };
+    
+    console.log("New suggestion object:", newSuggestion);
     
     setSuggestedTiles([...suggestedTiles, newSuggestion]);
     
@@ -326,6 +519,9 @@ const GameBoard = () => {
       timestamp: new Date().toISOString(),
       suggestion: newSuggestion
     };
+    
+    console.log("Adding new message with suggestion:", newMessage);
+    console.log("Current isGameCreator status:", isGameCreator);
     
     setChat([...chat, newMessage]);
     setTileInputSuggestion('');
@@ -392,10 +588,18 @@ const GameBoard = () => {
     // For now, we'll simulate this for the current user
     const userBoards = {};
     
-    // Create a board for each user
-    users.forEach(user => {
-      // Assign random items to tiles for this user
-      const shuffledItems = [...items].sort(() => Math.random() - 0.5);
+    // Create a board for each user with truly unique randomization
+    users.forEach(username => {
+      // Create a unique seed for each user to ensure different board layouts
+      const userSeed = username.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+      
+      // Use the seed to generate a consistent but unique shuffle for this user
+      const shuffledItems = [...items].sort(() => {
+        // Use a deterministic but unique shuffle based on the username
+        const randomValue = Math.sin(userSeed * 9999) * 10000;
+        return 0.5 - Math.sin(randomValue % 1);
+      });
+      
       const userTileContents = Array(game.rows * game.columns).fill(null).map((_, index) => {
         if (index < shuffledItems.length && index < game.rows * game.columns) {
           return shuffledItems[index];
@@ -403,12 +607,18 @@ const GameBoard = () => {
         return null;
       });
       
-      userBoards[user] = userTileContents;
+      userBoards[username] = userTileContents;
     });
     
-    // For the current user (in a real app, this would be pulled from their specific board)
-    // This simulates each user seeing their own randomized board
-    const currentUserBoard = userBoards[currentUser] || generateUserBoard();
+    // For the current user - ensure we get this user's unique board
+    let currentUserBoard;
+    if (userBoards[currentUser]) {
+      // Use the pre-generated board for this user
+      currentUserBoard = userBoards[currentUser];
+    } else {
+      // Generate a new unique board for this user
+      currentUserBoard = generateUserBoard();
+    }
     
     setTileContents(currentUserBoard);
     setGameStarted(true);
@@ -423,16 +633,20 @@ const GameBoard = () => {
     
     setChat([...chat, newMessage]);
     
-    // Navigate to chat tab when game starts
-    setActiveTab('chat');
+    // Navigate to board tab when game starts
+    setActiveTab('board');
   };
   
-  // Generate a board for the current user
+  // Generate a board for the current user with guaranteed uniqueness
   const generateUserBoard = () => {
-    // Assign random items to tiles with a seed based on user ID for consistency
+    // Create a unique seed for the current user
+    const userSeed = currentUser.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    
+    // Use the seed to generate a consistent but unique shuffle for this user
     const shuffledItems = [...items].sort(() => {
-      // Use a deterministic shuffle based on user ID
-      return 0.5 - Math.sin(user?.id || 0);
+      // Use a deterministic but unique shuffle based on username
+      const randomValue = Math.sin(userSeed * 9999) * 10000;
+      return 0.5 - Math.sin(randomValue % 1);
     });
     
     return Array(game.rows * game.columns).fill(null).map((_, index) => {
@@ -760,6 +974,12 @@ const GameBoard = () => {
   const currentUserColor = 'bg-primary-light text-gray-800';
   const systemMessageColor = 'bg-gray-200 text-gray-800';
 
+  // Modify our suggestion approval logic to use ONLY the original creator (no admin)
+  const canApproveSuggestions = currentUser === originalCreator;
+
+  // Modify our item adding logic to only allow the original creator (no admin)
+  const canAddItems = currentUser === originalCreator;
+
   return (
     <div className="flex flex-col bg-background">
       {/* Hidden file input for photo upload */}
@@ -796,26 +1016,54 @@ const GameBoard = () => {
                 </div>
               )}
               
+              {isGameCreator && (
+                <div className="ml-4 bg-green-100 text-green-800 px-3 py-1 rounded-full flex items-center">
+                  <FaGamepad className="mr-1 text-green-600" /> 
+                  Creator
+                </div>
+              )}
+              
               {isAdmin && (
                 <div className="ml-4 bg-blue-100 text-blue-800 px-3 py-1 rounded-full flex items-center">
                   <FaCog className="mr-1 text-blue-600" /> 
                   Admin
                 </div>
               )}
+              
+              {/* Show game creator info with emphasis on original creator */}
+              <div className="ml-4 text-sm text-gray-600">
+                Game Creator: {originalCreator || game.createdBy} {originalCreator === currentUser ? "(You)" : ""}
+              </div>
             </div>
             
-            {/* Admin button for generating dummy items */}
-            {!gameStarted && (
+            {/* Debugging section */}
+            <div className="flex items-center">
+              {/* Force creator status button */}
               <button 
-                className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
-                onClick={generateDummyItems}
-                title="Generate test items"
+                className="p-2 mr-2 rounded bg-red-200 hover:bg-red-300 transition-colors text-xs"
+                onClick={() => {
+                  console.log("Manual override - setting as creator");
+                  setIsGameCreator(true);
+                }}
+                title="Force creator status for debugging"
               >
-                <FaCog />
+                Debug: Force Creator
               </button>
-            )}
+            
+              {/* Admin button for generating dummy items */}
+              {!gameStarted && (
+                <button 
+                  className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
+                  onClick={generateDummyItems}
+                  title="Generate test items"
+                >
+                  <FaCog />
+                </button>
+              )}
+            </div>
           </div>
           
+          {/* Tab buttons */}
           <div className="flex border-b">
             <button
               className={`px-4 py-2 font-medium flex items-center ${
@@ -1057,6 +1305,11 @@ const GameBoard = () => {
                       // Check if this is an item message with a mention
                       const isItemMessage = msg.item !== undefined;
                       
+                      // Log message type for debugging
+                      if (isSuggestionMessage) {
+                        console.log("Suggestion message:", msg, "isGameCreator:", isGameCreator, "gameStarted:", gameStarted);
+                      }
+                      
                       // Get appropriate message text (handling @mentions)
                       let messageText = msg.message;
                       
@@ -1079,6 +1332,20 @@ const GameBoard = () => {
                         messageColor = currentUserColor;
                       } else {
                         messageColor = getUserColor(msg.sender);
+                      }
+                      
+                      // For debugging - check button visibility conditions
+                      const shouldShowApprovalButton = isSuggestionMessage && !gameStarted && canApproveSuggestions;
+                      if (isSuggestionMessage) {
+                        console.log(`Approval button conditions:`, {
+                          isSuggestionMessage, 
+                          notGameStarted: !gameStarted, 
+                          isGameCreator,
+                          gameCreatorFromRef: gameCreatorRef.current,
+                          currentUser,
+                          suggestionBy: msg.suggestion.suggestedBy,
+                          shouldShow: shouldShowApprovalButton
+                        });
                       }
                       
                       return (
@@ -1119,15 +1386,23 @@ const GameBoard = () => {
                               </div>
                             )}
                             
-                            {/* ALWAYS show approval button to game creator for ALL suggestions */}
-                            {isSuggestionMessage && !gameStarted && isGameCreator && (
+                            {/* Changed button for game creator - now a green checkmark */}
+                            {isSuggestionMessage && !gameStarted && canApproveSuggestions && (
                               <div className="mt-2 flex justify-end">
                                 <button 
-                                  className="btn-primary text-xs px-2 py-1"
+                                  className="bg-green-500 hover:bg-green-600 text-white rounded-full p-2"
                                   onClick={() => handleApproveSuggestion(msg.suggestion.id)}
+                                  title="Add to Game"
                                 >
-                                  Add to Game
+                                  <FaCheck />
                                 </button>
+                              </div>
+                            )}
+                            
+                            {/* For debugging - show creator status next to message if applicable */}
+                            {isSuggestionMessage && (
+                              <div className="mt-1 text-xs text-red-600 font-bold">
+                                Debug: Original Creator={originalCreator}, You={currentUser}, Match={originalCreator === currentUser ? "YES" : "NO"}
                               </div>
                             )}
                             
@@ -1198,7 +1473,7 @@ const GameBoard = () => {
                       ({items.length} / {minItemsRequired})
                     </p>
                     
-                    {(isGameCreator || isAdmin) && (
+                    {(canAddItems) && (
                       <form onSubmit={handleAddItem} className="flex mb-4">
                         <input
                           type="text"
@@ -1222,7 +1497,11 @@ const GameBoard = () => {
                     
                     {hasEnoughItems && !gameStarted && (isGameCreator || isAdmin) && (
                       <motion.button
-                        onClick={handleStartGame}
+                        onClick={() => {
+                          handleStartGame();
+                          // Navigate to board tab when game starts
+                          setActiveTab('board');
+                        }}
                         className="btn-success w-full mb-4 flex items-center justify-center"
                         whileHover={{ scale: 1.03 }}
                         whileTap={{ scale: 0.98 }}
@@ -1285,22 +1564,46 @@ const GameBoard = () => {
                   <label className="block text-gray-700 font-bold" htmlFor="tileNote">
                     Add a note:
                   </label>
+                </div>
+                <textarea
+                  id="tileNote"
+                  className="input-field min-h-[100px] w-full"
+                  placeholder="Write your note here..."
+                  value={tileNote}
+                  onChange={(e) => setTileNote(e.target.value)}
+                ></textarea>
+                
+                {/* Buttons under the text input */}
+                <div className="flex space-x-2 mt-3">
                   <button
-                    className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-full w-8 h-8 flex items-center justify-center"
+                    className="bg-red-500 hover:bg-red-600 text-white font-bold rounded-full w-10 h-10 flex items-center justify-center"
                     onClick={handleAddNote}
                     disabled={!tileNote.trim()}
                     title="Add note without claiming"
                   >
                     +
                   </button>
+                  
+                  <motion.button
+                    className="bg-blue-500 hover:bg-blue-600 text-white rounded-full w-10 h-10 flex items-center justify-center"
+                    whileHover={{ scale: 1.03 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => handlePhotoSelect('camera')}
+                    title="Take photo"
+                  >
+                    <FaCamera />
+                  </motion.button>
+                  
+                  <motion.button
+                    className="bg-purple-500 hover:bg-purple-600 text-white rounded-full w-10 h-10 flex items-center justify-center"
+                    whileHover={{ scale: 1.03 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => handlePhotoSelect('gallery')}
+                    title="Choose from gallery"
+                  >
+                    <FaImage />
+                  </motion.button>
                 </div>
-                <textarea
-                  id="tileNote"
-                  className="input-field min-h-[100px]"
-                  placeholder="Write your note here..."
-                  value={tileNote}
-                  onChange={(e) => setTileNote(e.target.value)}
-                ></textarea>
               </div>
               
               <div className="flex flex-col space-y-3">
@@ -1312,26 +1615,6 @@ const GameBoard = () => {
                 >
                   Claim
                 </motion.button>
-                
-                <div className="flex space-x-2">
-                  <motion.button
-                    className="btn-secondary flex-1 flex items-center justify-center"
-                    whileHover={{ scale: 1.03 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => handlePhotoSelect('camera')}
-                  >
-                    <FaCamera className="mr-2" /> Camera
-                  </motion.button>
-                  
-                  <motion.button
-                    className="btn-accent flex-1 flex items-center justify-center"
-                    whileHover={{ scale: 1.03 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => handlePhotoSelect('gallery')}
-                  >
-                    <FaImage className="mr-2" /> Gallery
-                  </motion.button>
-                </div>
               </div>
             </motion.div>
           </motion.div>
