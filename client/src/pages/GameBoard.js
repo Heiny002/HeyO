@@ -720,7 +720,7 @@ const GameBoard = () => {
       />
 
       {/* Header with tabs */}
-      <header className="bg-white shadow-md">
+      <header className="bg-white shadow-md relative z-10">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center">
@@ -877,7 +877,7 @@ const GameBoard = () => {
                         >
                           <FaPlus className="mr-1" /> Invite Friends
                         </button>
-                        <div id="inviteMenu" className="absolute right-0 mt-2 w-64 bg-white shadow-lg rounded-lg p-3 z-10 hidden">
+                        <div id="inviteMenu" className="absolute right-0 mt-2 w-64 bg-white shadow-lg rounded-lg p-3 z-30 hidden">
                           <h3 className="font-bold text-sm mb-2">Invite by Username</h3>
                           <form onSubmit={handleInviteFriend} className="flex mb-3">
                             <input
@@ -957,7 +957,7 @@ const GameBoard = () => {
                           >
                             <FaPlus className="mr-1" /> Suggest Tile
                           </button>
-                          <div id="suggestTileMenu" className="absolute right-0 mt-2 w-64 bg-white shadow-lg rounded-lg p-3 z-10 hidden">
+                          <div id="suggestTileMenu" className="absolute right-0 mt-2 w-64 bg-white shadow-lg rounded-lg p-3 z-30 hidden">
                             <form onSubmit={handleSuggestTile} className="flex mb-3">
                               <input
                                 type="text"
@@ -1182,7 +1182,7 @@ const GameBoard = () => {
       <AnimatePresence>
         {selectedTile && (
           <motion.div
-            className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 p-4"
+            className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-40 p-4"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}

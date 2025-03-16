@@ -91,8 +91,12 @@ function App() {
         {/* Full Screen Game Route */}
         <Route path="/game/:id" element={
           <ProtectedRoute>
-            <Header />
-            <GameBoard />
+            <div className="flex flex-col">
+              <Header />
+              <div className="flex-1">
+                <GameBoard />
+              </div>
+            </div>
           </ProtectedRoute>
         } />
         

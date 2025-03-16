@@ -39,7 +39,7 @@ const Header = () => {
   
   return (
     <motion.header 
-      className="bg-white shadow-md py-4 rainbow-border relative z-10"
+      className="bg-white shadow-md py-4 rainbow-border relative z-20"
       initial={{ y: -50, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.5 }}
@@ -93,7 +93,8 @@ const Header = () => {
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg overflow-hidden z-20"
+                  className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg overflow-hidden z-50"
+                  style={{ maxHeight: '90vh', overflowY: 'auto' }}
                 >
                   <div className="p-3 bg-gray-50 border-b border-gray-200">
                     <h3 className="text-sm font-semibold text-gray-700">Simulating Users</h3>
