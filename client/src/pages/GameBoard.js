@@ -61,6 +61,12 @@ const GameBoard = () => {
     if (location.state?.game) {
       // If we have game data from navigation state, use it
       setGame(location.state.game);
+      
+      // Set the active tab if provided in the state
+      if (location.state.activeTab) {
+        setActiveTab(location.state.activeTab);
+      }
+      
       setLoading(false);
     } else {
       // In a real app, you would fetch the game data from an API
@@ -188,16 +194,7 @@ const GameBoard = () => {
         window.open(`mailto:?subject=Join my game!&body=Click this link to join: ${link}`);
         break;
       case 'copy':
-        navigator.clipboard.writeText(link).then(() => {
-          // Add system message about copying
-          const newMessage = {
-            id: chat.length + 1,
-            sender: 'System',
-            message: `${currentUser} copied the game link to clipboard.`,
-            timestamp: new Date().toISOString()
-          };
-          setChat([...chat, newMessage]);
-        });
+        navigator.clipboard.writeText(link);
         break;
       default:
         if (navigator.share) {

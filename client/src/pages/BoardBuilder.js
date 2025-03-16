@@ -29,8 +29,13 @@ const BoardBuilder = () => {
     };
     
     // In a real app, you would save this to a database
-    // For now, we'll just navigate to the game page with the settings as params
-    navigate(`/game/${newGame.id}`, { state: { game: newGame } });
+    // Navigate to the game page with the settings and set activeTab to 'chat'
+    navigate(`/game/${newGame.id}`, { 
+      state: { 
+        game: newGame,
+        activeTab: 'chat'
+      } 
+    });
   };
 
   return (
