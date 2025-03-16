@@ -91,6 +91,7 @@ function App() {
         {/* Full Screen Game Route */}
         <Route path="/game/:id" element={
           <ProtectedRoute>
+            <Header />
             <GameBoard />
           </ProtectedRoute>
         } />

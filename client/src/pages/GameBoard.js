@@ -704,7 +704,7 @@ const GameBoard = () => {
   const hasEnoughItems = items.length >= minItemsRequired;
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="flex flex-col bg-background">
       {/* Hidden file input for photo upload */}
       <input 
         type="file" 
