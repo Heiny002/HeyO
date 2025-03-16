@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaArrowLeft, FaComments, FaGamepad, FaPlus, FaPlay, FaCog, FaCamera, FaImage, FaTrophy, FaCheck, FaTimes } from 'react-icons/fa';
+import { FaArrowLeft, FaComments, FaGamepad, FaPlus, FaPlay, FaCog, FaCamera, FaImage, FaTrophy, FaCheck, FaTimes, FaComment, FaEnvelope, FaCopy, FaShareAlt } from 'react-icons/fa';
 
 const GameBoard = () => {
   const { id } = useParams();
@@ -26,6 +26,7 @@ const GameBoard = () => {
   const [inviteUsername, setInviteUsername] = useState('');
   const [invitedUsers, setInvitedUsers] = useState([]);
   const [gameLink, setGameLink] = useState('');
+  const [showCopySuccess, setShowCopySuccess] = useState(false);
 
   // State for tile suggestions
   const [suggestedTiles, setSuggestedTiles] = useState([]);
@@ -195,6 +196,13 @@ const GameBoard = () => {
         break;
       case 'copy':
         navigator.clipboard.writeText(link);
+        setShowCopySuccess(true);
+        
+        // Hide the success message and close the popup after 1.5 seconds
+        setTimeout(() => {
+          setShowCopySuccess(false);
+          document.getElementById('inviteMenu').classList.add('hidden');
+        }, 1500);
         break;
       default:
         if (navigator.share) {
@@ -835,29 +843,39 @@ const GameBoard = () => {
                           <div className="flex flex-wrap gap-2">
                             <button 
                               onClick={() => shareGameLink('text')}
-                              className="btn-secondary px-2 py-1 text-xs"
+                              className="btn-secondary p-2 text-lg"
+                              title="Share via Text Message"
                             >
-                              Text Message
+                              <FaComment />
                             </button>
                             <button 
                               onClick={() => shareGameLink('email')}
-                              className="btn-secondary px-2 py-1 text-xs"
+                              className="btn-secondary p-2 text-lg"
+                              title="Share via Email"
                             >
-                              Email
+                              <FaEnvelope />
                             </button>
                             <button 
                               onClick={() => shareGameLink('copy')}
-                              className="btn-secondary px-2 py-1 text-xs"
+                              className="btn-secondary p-2 text-lg"
+                              title="Copy Link"
                             >
-                              Copy Link
+                              <FaCopy />
                             </button>
                             <button 
                               onClick={() => shareGameLink('share')}
-                              className="btn-secondary px-2 py-1 text-xs"
+                              className="btn-secondary p-2 text-lg"
+                              title="Share..."
                             >
-                              Share...
+                              <FaShareAlt />
                             </button>
                           </div>
+                          
+                          {showCopySuccess && (
+                            <div className="mt-2 p-2 bg-green-100 text-green-700 rounded-md text-sm text-center">
+                              Link copied to clipboard!
+                            </div>
+                          )}
                           
                           {invitedUsers.length > 0 && (
                             <>

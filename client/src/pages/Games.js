@@ -193,7 +193,7 @@ const Games = () => {
       </motion.div>
 
       {/* Game Categories Section (existing code) */}
-      <h2 className="text-2xl font-bold text-gray-800 mb-4">Game Categories</h2>
+      <h2 className="text-2xl font-bold text-gray-800 mb-4">Popular Boards</h2>
       <motion.div
         variants={containerVariants}
         initial="hidden"
