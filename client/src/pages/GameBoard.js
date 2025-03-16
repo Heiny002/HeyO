@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaArrowLeft, FaComments, FaGamepad, FaPlus, FaPlay, FaCog, FaCamera, FaImage, FaTrophy } from 'react-icons/fa';
+import { FaArrowLeft, FaComments, FaGamepad, FaPlus, FaPlay, FaCog, FaCamera, FaImage, FaTrophy, FaCheck, FaTimes } from 'react-icons/fa';
 
 const GameBoard = () => {
   const { id } = useParams();
@@ -27,9 +27,17 @@ const GameBoard = () => {
   const [tileNote, setTileNote] = useState('');
   const fileInputRef = useRef(null);
   
-  // Add state to track claimed tiles and winners
+  // Add state to track claimed tiles, photos, approvals, and winners
   const [claimedTiles, setClaimedTiles] = useState([]);
+  const [tilePhotos, setTilePhotos] = useState([]); // Store photos for each tile
+  const [tileApprovals, setTileApprovals] = useState([]); // Store approvals for each tile
+  const [tileDenials, setTileDenials] = useState([]); // Store denials for each tile
   const [winner, setWinner] = useState(null);
+  const [users, setUsers] = useState(['JHarvey', 'User2', 'User3', 'User4']); // Simulated users for testing
+  const currentUser = 'You'; // In a real app, this would come from an auth context
+  
+  // For handling claims waiting for approval
+  const [claimMessages, setClaimMessages] = useState([]);
 
   // Calculate minimum required items
   const calculateMinItems = (rows, columns) => {
@@ -61,11 +69,14 @@ const GameBoard = () => {
     }
   }, [id, location.state]);
 
-  // Initialize claimedTiles array when game loads or changes
+  // Initialize arrays when game loads or changes
   useEffect(() => {
     if (game) {
       const totalTiles = game.rows * game.columns;
       setClaimedTiles(Array(totalTiles).fill(false));
+      setTilePhotos(Array(totalTiles).fill(null));
+      setTileApprovals(Array(totalTiles).fill([]));
+      setTileDenials(Array(totalTiles).fill([]));
     }
   }, [game]);
 
@@ -77,7 +88,7 @@ const GameBoard = () => {
     
     const newMessage = {
       id: chat.length + 1,
-      sender: 'You', // In a real app, this would be the current user's name
+      sender: currentUser,
       message: message.trim(),
       timestamp: new Date().toISOString()
     };
@@ -149,6 +160,17 @@ const GameBoard = () => {
     }
   };
 
+  // Function to get required approvals count
+  const getRequiredApprovals = () => {
+    // Half of the other users (excluding current user)
+    return Math.ceil((users.length - 1) / 2);
+  };
+
+  // Check if a tile is approved by enough users
+  const isTileApproved = (index) => {
+    return tileApprovals[index] && tileApprovals[index].length >= getRequiredApprovals();
+  };
+
   // Check for win condition
   const checkWinCondition = (newClaimedTiles) => {
     if (!game) return false;
@@ -160,7 +182,8 @@ const GameBoard = () => {
       let rowComplete = true;
       for (let col = 0; col < columns; col++) {
         const index = row * columns + col;
-        if (!newClaimedTiles[index]) {
+        // Tile must be claimed AND approved by enough users
+        if (!newClaimedTiles[index] || !isTileApproved(index)) {
           rowComplete = false;
           break;
         }
@@ -176,7 +199,8 @@ const GameBoard = () => {
       let colComplete = true;
       for (let row = 0; row < rows; row++) {
         const index = row * columns + col;
-        if (!newClaimedTiles[index]) {
+        // Tile must be claimed AND approved by enough users
+        if (!newClaimedTiles[index] || !isTileApproved(index)) {
           colComplete = false;
           break;
         }
@@ -190,6 +214,68 @@ const GameBoard = () => {
     return false;
   };
 
+  // Handle file upload after selection
+  const handleFileUpload = (file, tileIndex) => {
+    if (!file) return;
+    
+    // In a real app, you would upload the file to a server
+    // Here we'll just use a data URL as a placeholder
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const photoUrl = e.target.result;
+      
+      // Update tile photos array
+      const newTilePhotos = [...tilePhotos];
+      newTilePhotos[tileIndex] = photoUrl;
+      setTilePhotos(newTilePhotos);
+      
+      // Claim the tile since a photo was added
+      const newClaimedTiles = [...claimedTiles];
+      newClaimedTiles[tileIndex] = true;
+      setClaimedTiles(newClaimedTiles);
+      
+      // Check for win condition
+      checkWinCondition(newClaimedTiles);
+      
+      // Create a claim message
+      addClaimMessage(tileIndex, photoUrl);
+      
+      // Close the popup
+      setSelectedTile(null);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Add a claim message to chat and track it for approvals
+  const addClaimMessage = (tileIndex, photoUrl = null) => {
+    const messageId = chat.length + 1;
+    const tile = tileContents[tileIndex];
+    
+    // Create the message object
+    const newMessage = {
+      id: messageId,
+      sender: 'System',
+      message: `${currentUser} claimed the "${tile.text}" tile`,
+      timestamp: new Date().toISOString(),
+      claimInfo: {
+        tileIndex,
+        user: currentUser,
+        photo: photoUrl,
+        note: tileNote
+      }
+    };
+    
+    // Add to chat
+    setChat([...chat, newMessage]);
+    
+    // Track this message for approvals
+    setClaimMessages([...claimMessages, {
+      messageId,
+      tileIndex,
+      user: currentUser
+    }]);
+  };
+
   // Handle claim button click
   const handleClaimTile = () => {
     if (!selectedTile || winner) return;
@@ -199,23 +285,64 @@ const GameBoard = () => {
     newClaimedTiles[selectedTile.index] = true;
     setClaimedTiles(newClaimedTiles);
     
+    // Add a claim message (without photo)
+    addClaimMessage(selectedTile.index);
+    
     // Check for win condition
     checkWinCondition(newClaimedTiles);
     
-    // In a real app, you would save this data to a database
-    console.log(`Claimed tile ${selectedTile.index + 1} with note: ${tileNote}`);
-    
     // Close the popup
     setSelectedTile(null);
-    
-    // Add a system message about claiming
-    const newMessage = {
-      id: chat.length + 1,
-      sender: 'System',
-      message: `Tile ${selectedTile.index + 1} (${selectedTile.item.text}) has been claimed!`,
-      timestamp: new Date().toISOString()
-    };
-    setChat([...chat, newMessage]);
+  };
+
+  // Handle approval or denial of a claimed tile
+  const handleApprovalAction = (messageId, tileIndex, isApproval) => {
+    if (isApproval) {
+      // Add current user to approvals for this tile
+      const newTileApprovals = [...tileApprovals];
+      if (!newTileApprovals[tileIndex].includes(currentUser)) {
+        newTileApprovals[tileIndex] = [...newTileApprovals[tileIndex], currentUser];
+        setTileApprovals(newTileApprovals);
+      }
+      
+      // Remove from denials if previously denied
+      const newTileDenials = [...tileDenials];
+      newTileDenials[tileIndex] = newTileDenials[tileIndex].filter(user => user !== currentUser);
+      setTileDenials(newTileDenials);
+      
+      // Add approval message to chat
+      const newMessage = {
+        id: chat.length + 1,
+        sender: 'System',
+        message: `${currentUser} approved the "${tileContents[tileIndex].text}" tile claim`,
+        timestamp: new Date().toISOString()
+      };
+      setChat([...chat, newMessage]);
+      
+      // Check if this approval triggers a win
+      checkWinCondition(claimedTiles);
+    } else {
+      // Add current user to denials for this tile
+      const newTileDenials = [...tileDenials];
+      if (!newTileDenials[tileIndex].includes(currentUser)) {
+        newTileDenials[tileIndex] = [...newTileDenials[tileIndex], currentUser];
+        setTileDenials(newTileDenials);
+      }
+      
+      // Remove from approvals if previously approved
+      const newTileApprovals = [...tileApprovals];
+      newTileApprovals[tileIndex] = newTileApprovals[tileIndex].filter(user => user !== currentUser);
+      setTileApprovals(newTileApprovals);
+      
+      // Add denial message to chat
+      const newMessage = {
+        id: chat.length + 1,
+        sender: 'System',
+        message: `${currentUser} denied the "${tileContents[tileIndex].text}" tile claim`,
+        timestamp: new Date().toISOString()
+      };
+      setChat([...chat, newMessage]);
+    }
   };
 
   // Handle photo selection
@@ -267,14 +394,9 @@ const GameBoard = () => {
         className="hidden" 
         onChange={(e) => {
           // Handle the file upload
-          if (e.target.files && e.target.files[0]) {
-            console.log('Selected file:', e.target.files[0]);
-            // In a real app, you would upload this file to a server
-            
-            // If we have a selected tile, we can associate this photo with it
-            if (selectedTile) {
-              console.log(`Photo attached to tile ${selectedTile.index + 1}`);
-            }
+          if (e.target.files && e.target.files[0] && selectedTile) {
+            // Process the file
+            handleFileUpload(e.target.files[0], selectedTile.index);
           }
         }}
       />
@@ -360,8 +482,18 @@ const GameBoard = () => {
                 }}
               >
                 {Array.from({ length: game.rows * game.columns }).map((_, index) => {
-                  // Determine if this tile is claimed
+                  // Determine if this tile is claimed and approved
                   const isClaimed = claimedTiles[index];
+                  const isApproved = isTileApproved(index);
+                  const hasPhoto = tilePhotos[index] !== null;
+                  
+                  let tileStyle = "bg-gradient-to-br from-primary-light to-secondary-light cursor-pointer";
+                  
+                  if (isClaimed && isApproved) {
+                    tileStyle = "bg-gradient-to-br from-green-400 to-green-600 cursor-default";
+                  } else if (isClaimed && !isApproved) {
+                    tileStyle = "bg-gradient-to-br from-yellow-400 to-yellow-600 cursor-default";
+                  }
                   
                   return (
                     <motion.div
@@ -377,12 +509,14 @@ const GameBoard = () => {
                       }}
                       whileHover={{ scale: isClaimed ? 1 : 0.95 }}
                       whileTap={{ scale: isClaimed ? 1 : 0.9 }}
-                      className={`rounded-lg shadow-md ${isClaimed 
-                        ? 'bg-gradient-to-br from-green-400 to-green-600 cursor-default' 
-                        : 'bg-gradient-to-br from-primary-light to-secondary-light cursor-pointer'
-                      } flex items-center justify-center font-bold text-white text-lg p-2 overflow-hidden`}
+                      className={`rounded-lg shadow-md ${tileStyle} flex items-center justify-center font-bold text-white text-lg p-2 overflow-hidden relative`}
                       onClick={() => !isClaimed && handleTileClick(index)}
                     >
+                      {hasPhoto && (
+                        <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center">
+                          <FaImage className="text-white text-xl" />
+                        </div>
+                      )}
                       {gameStarted && tileContents[index] 
                         ? <span className="text-center">{tileContents[index].text}</span>
                         : index + 1}
@@ -458,23 +592,85 @@ const GameBoard = () => {
                 <div className="md:col-span-2 bg-white rounded-lg shadow-lg p-4 flex flex-col">
                   <h2 className="text-xl font-bold mb-4">Game Chat</h2>
                   <div className="flex-grow overflow-y-auto mb-4 p-2 bg-gray-50 rounded-lg">
-                    {chat.map((msg) => (
-                      <div key={msg.id} className={`mb-3 ${msg.sender === 'You' ? 'text-right' : ''}`}>
-                        <div className={`inline-block px-4 py-2 rounded-lg ${
-                          msg.sender === 'System' 
-                            ? 'bg-gray-200 text-gray-800' 
-                            : msg.sender === 'You'
-                              ? 'bg-primary-light text-gray-800'
-                              : 'bg-secondary-light text-gray-800'
-                        }`}>
-                          {msg.sender !== 'You' && (
-                            <div className="font-bold text-sm">{msg.sender}</div>
-                          )}
-                          <p>{msg.message}</p>
-                          <div className="text-xs text-gray-600 mt-1">{formatTime(msg.timestamp)}</div>
+                    {chat.map((msg) => {
+                      // Check if this is a claim message that needs approval buttons
+                      const isClaimMessage = msg.claimInfo !== undefined;
+                      const tileIndex = isClaimMessage ? msg.claimInfo.tileIndex : null;
+                      
+                      // Determine if current user has already voted on this claim
+                      const hasApproved = tileIndex !== null && tileApprovals[tileIndex]?.includes(currentUser);
+                      const hasDenied = tileIndex !== null && tileDenials[tileIndex]?.includes(currentUser);
+                      
+                      return (
+                        <div key={msg.id} className={`mb-3 ${msg.sender === currentUser ? 'text-right' : ''}`}>
+                          <div className={`inline-block px-4 py-2 rounded-lg ${
+                            msg.sender === 'System' 
+                              ? 'bg-gray-200 text-gray-800 w-full' 
+                              : msg.sender === currentUser
+                                ? 'bg-primary-light text-gray-800'
+                                : 'bg-secondary-light text-gray-800'
+                          }`}>
+                            {msg.sender !== currentUser && (
+                              <div className="font-bold text-sm">{msg.sender}</div>
+                            )}
+                            <p>{msg.message}</p>
+                            
+                            {/* Display attached photo if exists */}
+                            {isClaimMessage && msg.claimInfo.photo && (
+                              <div className="mt-2">
+                                <img 
+                                  src={msg.claimInfo.photo} 
+                                  alt="Claim evidence" 
+                                  className="w-full h-auto rounded-lg shadow-sm"
+                                  style={{ maxHeight: '200px', objectFit: 'contain' }}
+                                />
+                              </div>
+                            )}
+                            
+                            {/* Display note if exists */}
+                            {isClaimMessage && msg.claimInfo.note && (
+                              <div className="mt-2 bg-white bg-opacity-50 p-2 rounded text-sm italic">
+                                Note: {msg.claimInfo.note}
+                              </div>
+                            )}
+                            
+                            {/* Approval buttons */}
+                            {isClaimMessage && msg.claimInfo.user !== currentUser && (
+                              <div className="mt-2 flex justify-end space-x-2">
+                                <button 
+                                  className={`p-2 rounded-full ${hasApproved ? 'bg-green-500 text-white' : 'bg-gray-100 hover:bg-green-100'}`}
+                                  onClick={() => handleApprovalAction(msg.id, tileIndex, true)}
+                                  disabled={hasApproved}
+                                >
+                                  <FaCheck />
+                                </button>
+                                <button 
+                                  className={`p-2 rounded-full ${hasDenied ? 'bg-red-500 text-white' : 'bg-gray-100 hover:bg-red-100'}`}
+                                  onClick={() => handleApprovalAction(msg.id, tileIndex, false)}
+                                  disabled={hasDenied}
+                                >
+                                  <FaTimes />
+                                </button>
+                              </div>
+                            )}
+                            
+                            {/* Approval status */}
+                            {isClaimMessage && (
+                              <div className="mt-2 text-xs text-gray-600 flex justify-between">
+                                <span>
+                                  Approvals: {tileApprovals[tileIndex]?.length || 0}/{getRequiredApprovals()}
+                                </span>
+                                <span>
+                                  Denials: {tileDenials[tileIndex]?.length || 0}
+                                </span>
+                              </div>
+                            )}
+                            
+                            <div className="text-xs text-gray-600 mt-1">{formatTime(msg.timestamp)}</div>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                   <form onSubmit={handleSendMessage} className="flex">
                     <input
@@ -565,18 +761,6 @@ const GameBoard = () => {
                   </motion.button>
                 </div>
               </div>
-
-              {/* Show winning notification if there is a winner */}
-              {winner && (
-                <motion.div 
-                  className="mt-4 p-3 bg-yellow-100 text-yellow-800 rounded-lg text-center"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                >
-                  <FaTrophy className="inline-block mr-2 text-yellow-600" />
-                  Congratulations! {winner} completed!
-                </motion.div>
-              )}
             </motion.div>
           </motion.div>
         )}
@@ -595,7 +779,7 @@ const GameBoard = () => {
               <FaTrophy className="text-2xl text-yellow-600 mr-3" />
               <div>
                 <h3 className="font-bold text-lg">Winner!</h3>
-                <p>{winner} has been completed!</p>
+                <p>{winner} has been completed and approved!</p>
               </div>
             </div>
           </motion.div>
