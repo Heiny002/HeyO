@@ -22,6 +22,15 @@ const GameBoard = () => {
   const [gameStarted, setGameStarted] = useState(false);
   const [tileContents, setTileContents] = useState([]);
   
+  // State for friend invitations
+  const [inviteUsername, setInviteUsername] = useState('');
+  const [invitedUsers, setInvitedUsers] = useState([]);
+  const [gameLink, setGameLink] = useState('');
+
+  // State for tile suggestions
+  const [suggestedTiles, setSuggestedTiles] = useState([]);
+  const [tileInputSuggestion, setTileInputSuggestion] = useState('');
+  
   // State for tile selection popup
   const [selectedTile, setSelectedTile] = useState(null);
   const [tileNote, setTileNote] = useState('');
@@ -33,6 +42,7 @@ const GameBoard = () => {
   const [tileApprovals, setTileApprovals] = useState([]); // Store approvals for each tile
   const [tileDenials, setTileDenials] = useState([]); // Store denials for each tile
   const [winner, setWinner] = useState(null);
+  // eslint-disable-next-line no-unused-vars
   const [users, setUsers] = useState(['JHarvey', 'User2', 'User3', 'User4']); // Simulated users for testing
   const currentUser = 'You'; // In a real app, this would come from an auth context
   
@@ -103,13 +113,143 @@ const GameBoard = () => {
     
     if (!itemInput.trim()) return;
     
+    // Check if the item contains @ mentions
+    const text = itemInput.trim();
+    const mentionRegex = /@(\w+)/g;
+    const matches = [...text.matchAll(mentionRegex)];
+    const mentionedUsers = matches.map(match => match[1]);
+    
     const newItem = {
       id: Date.now(),
-      text: itemInput.trim()
+      text: text,
+      hiddenFrom: mentionedUsers
     };
     
     setItems([...items, newItem]);
     setItemInput('');
+  };
+
+  // Handle friend invitation by username
+  const handleInviteFriend = (e) => {
+    e.preventDefault();
+    
+    if (!inviteUsername.trim()) return;
+    
+    // Check if user already invited
+    if (invitedUsers.includes(inviteUsername.trim())) {
+      return;
+    }
+    
+    setInvitedUsers([...invitedUsers, inviteUsername.trim()]);
+    
+    // Add system message about invitation
+    const newMessage = {
+      id: chat.length + 1,
+      sender: 'System',
+      message: `${currentUser} invited ${inviteUsername.trim()} to join the game.`,
+      timestamp: new Date().toISOString()
+    };
+    
+    setChat([...chat, newMessage]);
+    setInviteUsername('');
+  };
+
+  // Generate shareable game link
+  const generateGameLink = () => {
+    // In a real app, you'd create a unique link with the game ID
+    const link = `${window.location.origin}/join-game/${id}`;
+    setGameLink(link);
+    return link;
+  };
+
+  // Share game link via different methods
+  const shareGameLink = (method) => {
+    const link = gameLink || generateGameLink();
+    
+    // In a real app, these would use the Web Share API or deep links
+    switch(method) {
+      case 'text':
+        window.open(`sms:?body=Join my game! ${link}`);
+        break;
+      case 'email':
+        window.open(`mailto:?subject=Join my game!&body=Click this link to join: ${link}`);
+        break;
+      case 'copy':
+        navigator.clipboard.writeText(link).then(() => {
+          // Add system message about copying
+          const newMessage = {
+            id: chat.length + 1,
+            sender: 'System',
+            message: `${currentUser} copied the game link to clipboard.`,
+            timestamp: new Date().toISOString()
+          };
+          setChat([...chat, newMessage]);
+        });
+        break;
+      default:
+        if (navigator.share) {
+          navigator.share({
+            title: 'Join my game!',
+            text: 'Click this link to join:',
+            url: link
+          });
+        }
+    }
+  };
+
+  // Handle tile suggestion from users
+  const handleSuggestTile = (e) => {
+    e.preventDefault();
+    
+    if (!tileInputSuggestion.trim()) return;
+    
+    const newSuggestion = {
+      id: Date.now(),
+      text: tileInputSuggestion.trim(),
+      suggestedBy: currentUser
+    };
+    
+    setSuggestedTiles([...suggestedTiles, newSuggestion]);
+    
+    // Add message about the suggestion
+    const newMessage = {
+      id: chat.length + 1,
+      sender: 'System',
+      message: `${currentUser} suggested a new tile: "${tileInputSuggestion.trim()}"`,
+      timestamp: new Date().toISOString(),
+      suggestion: newSuggestion
+    };
+    
+    setChat([...chat, newMessage]);
+    setTileInputSuggestion('');
+  };
+
+  // Handle approving a suggested tile
+  const handleApproveSuggestion = (suggestionId) => {
+    const suggestion = suggestedTiles.find(s => s.id === suggestionId);
+    
+    if (!suggestion) return;
+    
+    // Add to items
+    const newItem = {
+      id: Date.now(),
+      text: suggestion.text
+    };
+    
+    setItems([...items, newItem]);
+    
+    // Remove from suggestions
+    setSuggestedTiles(suggestedTiles.filter(s => s.id !== suggestionId));
+    
+    // Add system message about approval
+    const newMessage = {
+      id: chat.length + 1,
+      sender: 'System',
+      message: `${currentUser} approved "${suggestion.text}" and added it to the game.`,
+      timestamp: new Date().toISOString()
+    };
+    
+    setChat([...chat, newMessage]);
   };
 
   // Generate dummy test items
@@ -132,32 +272,58 @@ const GameBoard = () => {
 
   // Handle game start
   const handleStartGame = () => {
-    if (!game) return;
+    if (!hasEnoughItems) {
+      return;
+    }
     
-    const totalTiles = game.rows * game.columns;
+    // Assign random items to tiles
+    const shuffledItems = [...items].sort(() => Math.random() - 0.5);
+    const newTileContents = Array(game.rows * game.columns).fill(null).map((_, index) => {
+      if (index < shuffledItems.length && index < game.rows * game.columns) {
+        return shuffledItems[index];
+      }
+      return null;
+    });
     
-    // Randomly select and shuffle items
-    const shuffledItems = [...items]
-      .sort(() => 0.5 - Math.random())
-      .slice(0, totalTiles);
-    
-    // Assign items to tiles
-    setTileContents(shuffledItems);
+    setTileContents(newTileContents);
     setGameStarted(true);
     
-    // Switch to board tab automatically
+    // Add system message about game start
+    const newMessage = {
+      id: chat.length + 1,
+      sender: 'System',
+      message: 'The game has started! Click on a tile to claim it.',
+      timestamp: new Date().toISOString()
+    };
+    
+    setChat([...chat, newMessage]);
+    
+    // Force switch to board tab when game starts
     setActiveTab('board');
   };
 
   // Handle tile click
   const handleTileClick = (index) => {
-    if (gameStarted && tileContents[index] && !claimedTiles[index] && !winner) {
-      setSelectedTile({
-        index,
-        item: tileContents[index]
-      });
-      setTileNote('');
+    if (!gameStarted || !tileContents[index] || claimedTiles[index] || winner) {
+      return;
     }
+    
+    // Check if this tile is hidden from the current user
+    if (isTileHiddenFromUser(tileContents[index])) {
+      return;
+    }
+    
+    setSelectedTile({
+      index,
+      item: tileContents[index]
+    });
+    setTileNote('');
+  };
+
+  // Check if a tile should be hidden from current user (if tagged with @username)
+  const isTileHiddenFromUser = (tile) => {
+    if (!tile || !tile.hiddenFrom) return false;
+    return tile.hiddenFrom.includes(currentUser);
   };
 
   // Function to get required approvals count
@@ -482,10 +648,10 @@ const GameBoard = () => {
                 }}
               >
                 {Array.from({ length: game.rows * game.columns }).map((_, index) => {
-                  // Determine if this tile is claimed and approved
-                  const isClaimed = claimedTiles[index];
+                  const isClaimed = !!claimedTiles[index];
                   const isApproved = isTileApproved(index);
                   const hasPhoto = tilePhotos[index] !== null;
+                  const isHiddenFromUser = gameStarted && tileContents[index] && isTileHiddenFromUser(tileContents[index]);
                   
                   let tileStyle = "bg-gradient-to-br from-primary-light to-secondary-light cursor-pointer";
                   
@@ -493,6 +659,8 @@ const GameBoard = () => {
                     tileStyle = "bg-gradient-to-br from-green-400 to-green-600 cursor-default";
                   } else if (isClaimed && !isApproved) {
                     tileStyle = "bg-gradient-to-br from-yellow-400 to-yellow-600 cursor-default";
+                  } else if (isHiddenFromUser) {
+                    tileStyle = "bg-gradient-to-br from-gray-400 to-gray-600 cursor-not-allowed";
                   }
                   
                   return (
@@ -507,19 +675,23 @@ const GameBoard = () => {
                         stiffness: 260,
                         damping: 20 
                       }}
-                      whileHover={{ scale: isClaimed ? 1 : 0.95 }}
-                      whileTap={{ scale: isClaimed ? 1 : 0.9 }}
+                      whileHover={{ scale: isClaimed || isHiddenFromUser ? 1 : 0.95 }}
+                      whileTap={{ scale: isClaimed || isHiddenFromUser ? 1 : 0.9 }}
                       className={`rounded-lg shadow-md ${tileStyle} flex items-center justify-center font-bold text-white text-lg p-2 overflow-hidden relative`}
-                      onClick={() => !isClaimed && handleTileClick(index)}
+                      onClick={() => !isClaimed && !isHiddenFromUser && handleTileClick(index)}
                     >
                       {hasPhoto && (
                         <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center">
                           <FaImage className="text-white text-xl" />
                         </div>
                       )}
-                      {gameStarted && tileContents[index] 
-                        ? <span className="text-center">{tileContents[index].text}</span>
-                        : index + 1}
+                      {isHiddenFromUser ? (
+                        <span className="text-center">Hidden</span>
+                      ) : gameStarted && tileContents[index] ? (
+                        <span className="text-center">{tileContents[index].text}</span>
+                      ) : (
+                        index + 1
+                      )}
                     </motion.div>
                   );
                 })}
@@ -535,67 +707,184 @@ const GameBoard = () => {
             >
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
                 {/* Left column - Item input and list */}
-                <div className="md:col-span-1 bg-white rounded-lg shadow-lg p-4 flex flex-col">
-                  <h2 className="text-xl font-bold mb-4">Game Items</h2>
-                  <p className="text-sm text-gray-600 mb-4">
-                    Add items for the game. You need at least {minItemsRequired} items.
-                    ({items.length} / {minItemsRequired})
-                  </p>
-                  
-                  <form onSubmit={handleAddItem} className="flex mb-4">
-                    <input
-                      type="text"
-                      className="input-field flex-grow mr-2"
-                      placeholder="Add an item..."
-                      value={itemInput}
-                      onChange={(e) => setItemInput(e.target.value)}
-                      disabled={gameStarted}
-                    />
-                    <motion.button
-                      type="submit"
-                      className="btn-primary"
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      disabled={!itemInput.trim() || gameStarted}
-                    >
-                      <FaPlus />
-                    </motion.button>
-                  </form>
-                  
-                  {hasEnoughItems && !gameStarted && (
-                    <motion.button
-                      onClick={handleStartGame}
-                      className="btn-success w-full mb-4 flex items-center justify-center"
-                      whileHover={{ scale: 1.03 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      <FaPlay className="mr-2" /> Start Game
-                    </motion.button>
-                  )}
-                  
-                  <div className="flex-grow overflow-y-auto bg-gray-50 rounded-lg p-2">
-                    {items.length > 0 ? (
-                      <ul className="space-y-2">
-                        {items.map((item, index) => (
-                          <li key={item.id} className="bg-white p-3 rounded-md shadow-sm flex justify-between items-center">
-                            <span className="font-medium">{index + 1}. {item.text}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="text-center text-gray-500 py-4">No items added yet</p>
+                {!gameStarted && (
+                  <div className="md:col-span-1 bg-white rounded-lg shadow-lg p-4 flex flex-col">
+                    <h2 className="text-xl font-bold mb-4">Game Items</h2>
+                    <p className="text-sm text-gray-600 mb-4">
+                      Add items for the game. You need at least {minItemsRequired} items.
+                      ({items.length} / {minItemsRequired})
+                    </p>
+                    
+                    <form onSubmit={handleAddItem} className="flex mb-4">
+                      <input
+                        type="text"
+                        className="input-field flex-grow mr-2"
+                        placeholder="Add an item... (use @ to hide from users)"
+                        value={itemInput}
+                        onChange={(e) => setItemInput(e.target.value)}
+                        disabled={gameStarted}
+                      />
+                      <motion.button
+                        type="submit"
+                        className="btn-primary"
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        disabled={!itemInput.trim() || gameStarted}
+                      >
+                        <FaPlus />
+                      </motion.button>
+                    </form>
+                    
+                    {hasEnoughItems && !gameStarted && (
+                      <motion.button
+                        onClick={handleStartGame}
+                        className="btn-success w-full mb-4 flex items-center justify-center"
+                        whileHover={{ scale: 1.03 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        <FaPlay className="mr-2" /> Start Game
+                      </motion.button>
                     )}
+                    
+                    <div className="flex-grow overflow-y-auto bg-gray-50 rounded-lg p-2">
+                      {items.length > 0 ? (
+                        <ul className="space-y-2">
+                          {items.map((item, index) => (
+                            <li key={item.id} className="bg-white p-3 rounded-md shadow-sm flex justify-between items-center">
+                              <span className="font-medium">
+                                {index + 1}. {item.text}
+                                {item.hiddenFrom && item.hiddenFrom.length > 0 && (
+                                  <span className="text-xs text-gray-500 ml-2">
+                                    (Hidden from: {item.hiddenFrom.join(', ')})
+                                  </span>
+                                )}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-center text-gray-500 py-4">No items added yet</p>
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
                 
                 {/* Right column - Chat */}
-                <div className="md:col-span-2 bg-white rounded-lg shadow-lg p-4 flex flex-col">
-                  <h2 className="text-xl font-bold mb-4">Game Chat</h2>
+                <div className={`${gameStarted ? 'md:col-span-3' : 'md:col-span-2'} bg-white rounded-lg shadow-lg p-4 flex flex-col`}>
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-xl font-bold">Game Chat</h2>
+                    
+                    {/* Friend invitation section */}
+                    <div className="flex space-x-2">
+                      <div className="relative">
+                        <button 
+                          onClick={() => document.getElementById('inviteMenu').classList.toggle('hidden')}
+                          className="btn-secondary px-3 py-1 text-sm flex items-center"
+                        >
+                          <FaPlus className="mr-1" /> Invite Friends
+                        </button>
+                        <div id="inviteMenu" className="absolute right-0 mt-2 w-64 bg-white shadow-lg rounded-lg p-3 z-10 hidden">
+                          <h3 className="font-bold text-sm mb-2">Invite by Username</h3>
+                          <form onSubmit={handleInviteFriend} className="flex mb-3">
+                            <input
+                              type="text"
+                              className="input-field flex-grow mr-1 text-sm"
+                              placeholder="Username..."
+                              value={inviteUsername}
+                              onChange={(e) => setInviteUsername(e.target.value)}
+                            />
+                            <motion.button
+                              type="submit"
+                              className="btn-primary text-sm px-2"
+                              whileHover={{ scale: 1.05 }}
+                              whileTap={{ scale: 0.95 }}
+                              disabled={!inviteUsername.trim()}
+                            >
+                              Add
+                            </motion.button>
+                          </form>
+                          
+                          <h3 className="font-bold text-sm mb-2">Share Link</h3>
+                          <div className="flex flex-wrap gap-2">
+                            <button 
+                              onClick={() => shareGameLink('text')}
+                              className="btn-secondary px-2 py-1 text-xs"
+                            >
+                              Text Message
+                            </button>
+                            <button 
+                              onClick={() => shareGameLink('email')}
+                              className="btn-secondary px-2 py-1 text-xs"
+                            >
+                              Email
+                            </button>
+                            <button 
+                              onClick={() => shareGameLink('copy')}
+                              className="btn-secondary px-2 py-1 text-xs"
+                            >
+                              Copy Link
+                            </button>
+                            <button 
+                              onClick={() => shareGameLink('share')}
+                              className="btn-secondary px-2 py-1 text-xs"
+                            >
+                              Share...
+                            </button>
+                          </div>
+                          
+                          {invitedUsers.length > 0 && (
+                            <>
+                              <h3 className="font-bold text-sm mt-3 mb-2">Invited Users</h3>
+                              <ul className="text-sm">
+                                {invitedUsers.map((user, index) => (
+                                  <li key={index} className="mb-1">{user}</li>
+                                ))}
+                              </ul>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {!gameStarted && (
+                        <div className="relative">
+                          <button 
+                            onClick={() => document.getElementById('suggestTileMenu').classList.toggle('hidden')}
+                            className="btn-secondary px-3 py-1 text-sm flex items-center"
+                          >
+                            <FaPlus className="mr-1" /> Suggest Tile
+                          </button>
+                          <div id="suggestTileMenu" className="absolute right-0 mt-2 w-64 bg-white shadow-lg rounded-lg p-3 z-10 hidden">
+                            <form onSubmit={handleSuggestTile} className="flex mb-3">
+                              <input
+                                type="text"
+                                className="input-field flex-grow mr-1 text-sm"
+                                placeholder="Suggest a tile..."
+                                value={tileInputSuggestion}
+                                onChange={(e) => setTileInputSuggestion(e.target.value)}
+                              />
+                              <motion.button
+                                type="submit"
+                                className="btn-primary text-sm px-2"
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                disabled={!tileInputSuggestion.trim()}
+                              >
+                                Suggest
+                              </motion.button>
+                            </form>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                   <div className="flex-grow overflow-y-auto mb-4 p-2 bg-gray-50 rounded-lg">
                     {chat.map((msg) => {
                       // Check if this is a claim message that needs approval buttons
                       const isClaimMessage = msg.claimInfo !== undefined;
                       const tileIndex = isClaimMessage ? msg.claimInfo.tileIndex : null;
+                      
+                      // Check if this is a tile suggestion message
+                      const isSuggestionMessage = msg.suggestion !== undefined;
                       
                       // Determine if current user has already voted on this claim
                       const hasApproved = tileIndex !== null && tileApprovals[tileIndex]?.includes(currentUser);
@@ -634,7 +923,19 @@ const GameBoard = () => {
                               </div>
                             )}
                             
-                            {/* Approval buttons */}
+                            {/* Tile suggestion approval button */}
+                            {isSuggestionMessage && !gameStarted && (
+                              <div className="mt-2 flex justify-end">
+                                <button 
+                                  className="btn-primary text-xs px-2 py-1"
+                                  onClick={() => handleApproveSuggestion(msg.suggestion.id)}
+                                >
+                                  Add to Game
+                                </button>
+                              </div>
+                            )}
+                            
+                            {/* Approval buttons for claims */}
                             {isClaimMessage && msg.claimInfo.user !== currentUser && (
                               <div className="mt-2 flex justify-end space-x-2">
                                 <button 
