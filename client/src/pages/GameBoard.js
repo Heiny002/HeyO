@@ -56,6 +56,9 @@ const GameBoard = () => {
   // User-specific game state - maintained in localStorage
   const [userGameState, setUserGameState] = useState({});
 
+  // Add after user declaration around line 12
+  const [isGameCreator, setIsGameCreator] = useState(false);
+
   // Calculate minimum required items
   const calculateMinItems = (rows, columns) => {
     const totalTiles = rows * columns;
@@ -73,24 +76,36 @@ const GameBoard = () => {
         setActiveTab(location.state.activeTab);
       }
       
+      // Check if current user is the game creator
+      if (location.state.game.createdBy === currentUser) {
+        setIsGameCreator(true);
+      }
+      
       setLoading(false);
     } else {
       // In a real app, you would fetch the game data from an API
       // For now, we'll just simulate a loading state
       setTimeout(() => {
         // Example fallback game data
-        setGame({
+        const newGame = {
           id,
           name: 'Example Board',
           rows: 4,
           columns: 3,
           createdAt: new Date().toISOString(),
           createdBy: 'JHarvey'
-        });
+        };
+        setGame(newGame);
+        
+        // Check if current user is the game creator
+        if (newGame.createdBy === currentUser) {
+          setIsGameCreator(true);
+        }
+        
         setLoading(false);
       }, 1000);
     }
-  }, [id, location.state]);
+  }, [id, location.state, currentUser]);
 
   // Load user-specific game state from localStorage
   useEffect(() => {
@@ -276,10 +291,17 @@ const GameBoard = () => {
     
     if (!tileInputSuggestion.trim()) return;
     
+    // Check for @mentions
+    const text = tileInputSuggestion.trim();
+    const mentionRegex = /@(\w+)/g;
+    const matches = [...text.matchAll(mentionRegex)];
+    const mentionedUsers = matches.map(match => match[1]);
+    
     const newSuggestion = {
       id: Date.now(),
-      text: tileInputSuggestion.trim(),
-      suggestedBy: currentUser
+      text: text,
+      suggestedBy: currentUser,
+      hiddenFrom: mentionedUsers.length > 0 ? mentionedUsers : undefined
     };
     
     setSuggestedTiles([...suggestedTiles, newSuggestion]);
@@ -288,7 +310,7 @@ const GameBoard = () => {
     const newMessage = {
       id: chat.length + 1,
       sender: 'System',
-      message: `${currentUser} suggested a new tile: "${tileInputSuggestion.trim()}"`,
+      message: `${currentUser} suggested a new tile: "${text}"`,
       timestamp: new Date().toISOString(),
       suggestion: newSuggestion
     };
@@ -703,6 +725,35 @@ const GameBoard = () => {
   const minItemsRequired = game ? calculateMinItems(game.rows, game.columns) : 0;
   const hasEnoughItems = items.length >= minItemsRequired;
 
+  // Generate consistent color for each user
+  const getUserColor = (username) => {
+    // List of background colors with good text contrast
+    const colors = [
+      'bg-blue-200 text-blue-900',     // Blue
+      'bg-green-200 text-green-900',   // Green
+      'bg-yellow-200 text-yellow-900', // Yellow
+      'bg-pink-200 text-pink-900',     // Pink
+      'bg-purple-200 text-purple-900', // Purple
+      'bg-indigo-200 text-indigo-900', // Indigo
+      'bg-red-200 text-red-900',       // Red
+      'bg-orange-200 text-orange-900'  // Orange
+    ];
+    
+    // Create a simple hash of the username
+    let hash = 0;
+    for (let i = 0; i < username.length; i++) {
+      hash = username.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    
+    // Use the hash to select a color
+    const colorIndex = Math.abs(hash) % colors.length;
+    return colors[colorIndex];
+  };
+
+  // Get consistent color for current user
+  const currentUserColor = 'bg-primary-light text-gray-800';
+  const systemMessageColor = 'bg-gray-200 text-gray-800';
+
   return (
     <div className="flex flex-col bg-background">
       {/* Hidden file input for photo upload */}
@@ -962,7 +1013,7 @@ const GameBoard = () => {
                               <input
                                 type="text"
                                 className="input-field flex-grow mr-1 text-sm"
-                                placeholder="Suggest a tile..."
+                                placeholder="Suggest a tile... (use @ to hide from users)"
                                 value={tileInputSuggestion}
                                 onChange={(e) => setTileInputSuggestion(e.target.value)}
                               />
@@ -981,7 +1032,7 @@ const GameBoard = () => {
                       )}
                     </div>
                   </div>
-                  <div className="flex-grow overflow-y-auto mb-4 p-2 bg-gray-50 rounded-lg">
+                  <div className="flex-grow overflow-y-auto mb-4 p-2 bg-gray-50 rounded-lg" style={{ maxHeight: '60vh' }}>
                     {[...chat].reverse().map((msg) => {
                       // Check if this is a claim message that needs approval buttons
                       const isClaimMessage = msg.claimInfo !== undefined;
@@ -993,10 +1044,15 @@ const GameBoard = () => {
                       // Check if this is an item message with a mention
                       const isItemMessage = msg.item !== undefined;
                       
+                      // Check if this message should be hidden from current user
+                      const shouldHideFromUser = 
+                        (isSuggestionMessage && msg.suggestion.hiddenFrom && msg.suggestion.hiddenFrom.includes(currentUser)) ||
+                        (isItemMessage && msg.item.hiddenFrom && msg.item.hiddenFrom.includes(currentUser));
+                      
                       // Get appropriate message text (handling @mentions)
                       let messageText = msg.message;
-                      if (isItemMessage && msg.item.hiddenFrom && msg.item.hiddenFrom.includes(currentUser)) {
-                        messageText = `${currentUser} added a new item: "A tile about you!"`;
+                      if (shouldHideFromUser) {
+                        messageText = `A new tile about you was added to the game`;
                       } else if (isClaimMessage && tileContents[tileIndex] && 
                                 tileContents[tileIndex].hiddenFrom && 
                                 tileContents[tileIndex].hiddenFrom.includes(currentUser)) {
@@ -1007,14 +1063,20 @@ const GameBoard = () => {
                       const hasApproved = tileIndex !== null && tileApprovals[tileIndex]?.includes(currentUser);
                       const hasDenied = tileIndex !== null && tileDenials[tileIndex]?.includes(currentUser);
                       
+                      // Determine message color based on sender
+                      let messageColor = '';
+                      if (msg.sender === 'System') {
+                        messageColor = systemMessageColor;
+                      } else if (msg.sender === currentUser) {
+                        messageColor = currentUserColor;
+                      } else {
+                        messageColor = getUserColor(msg.sender);
+                      }
+                      
                       return (
                         <div key={msg.id} className={`mb-3 ${msg.sender === currentUser ? 'text-right' : ''}`}>
-                          <div className={`inline-block px-4 py-2 rounded-lg ${
-                            msg.sender === 'System' 
-                              ? 'bg-gray-200 text-gray-800 w-full' 
-                              : msg.sender === currentUser
-                                ? 'bg-primary-light text-gray-800'
-                                : 'bg-secondary-light text-gray-800'
+                          <div className={`inline-block px-4 py-2 rounded-lg ${messageColor} ${
+                            msg.sender === 'System' ? 'w-full' : ''
                           }`}>
                             {msg.sender !== currentUser && (
                               <div className="font-bold text-sm">{msg.sender}</div>
@@ -1040,8 +1102,8 @@ const GameBoard = () => {
                               </div>
                             )}
                             
-                            {/* Tile suggestion approval button */}
-                            {isSuggestionMessage && !gameStarted && (
+                            {/* Tile suggestion approval button - only visible to game creator */}
+                            {isSuggestionMessage && !gameStarted && isGameCreator && !shouldHideFromUser && (
                               <div className="mt-2 flex justify-end">
                                 <button 
                                   className="btn-primary text-xs px-2 py-1"
@@ -1119,27 +1181,29 @@ const GameBoard = () => {
                       ({items.length} / {minItemsRequired})
                     </p>
                     
-                    <form onSubmit={handleAddItem} className="flex mb-4">
-                      <input
-                        type="text"
-                        className="input-field flex-grow mr-2"
-                        placeholder="Add an item... (use @ to hide from users)"
-                        value={itemInput}
-                        onChange={(e) => setItemInput(e.target.value)}
-                        disabled={gameStarted}
-                      />
-                      <motion.button
-                        type="submit"
-                        className="btn-primary"
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        disabled={!itemInput.trim() || gameStarted}
-                      >
-                        <FaPlus />
-                      </motion.button>
-                    </form>
+                    {isGameCreator && (
+                      <form onSubmit={handleAddItem} className="flex mb-4">
+                        <input
+                          type="text"
+                          className="input-field flex-grow mr-2"
+                          placeholder="Add an item... (use @ to hide from users)"
+                          value={itemInput}
+                          onChange={(e) => setItemInput(e.target.value)}
+                          disabled={gameStarted}
+                        />
+                        <motion.button
+                          type="submit"
+                          className="btn-primary"
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          disabled={!itemInput.trim() || gameStarted}
+                        >
+                          <FaPlus />
+                        </motion.button>
+                      </form>
+                    )}
                     
-                    {hasEnoughItems && !gameStarted && (
+                    {hasEnoughItems && !gameStarted && isGameCreator && (
                       <motion.button
                         onClick={handleStartGame}
                         className="btn-success w-full mb-4 flex items-center justify-center"
@@ -1157,7 +1221,7 @@ const GameBoard = () => {
                             <li key={item.id} className="bg-white p-3 rounded-md shadow-sm flex justify-between items-center">
                               <span className="font-medium">
                                 {index + 1}. {getItemDisplayText(item)}
-                                {item.hiddenFrom && item.hiddenFrom.length > 0 && (
+                                {isGameCreator && item.hiddenFrom && item.hiddenFrom.length > 0 && (
                                   <span className="text-xs text-gray-500 ml-2">
                                     (Hidden from: {item.hiddenFrom.join(', ')})
                                   </span>
