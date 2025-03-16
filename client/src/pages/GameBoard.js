@@ -308,11 +308,15 @@ const GameBoard = () => {
     const matches = [...text.matchAll(mentionRegex)];
     const mentionedUsers = matches.map(match => match[1]);
     
+    // Filter out game creator from hiddenFrom array
+    const creatorName = game?.createdBy;
+    const filteredHiddenUsers = mentionedUsers.filter(user => user !== creatorName);
+    
     const newSuggestion = {
       id: Date.now(),
       text: text,
       suggestedBy: currentUser,
-      hiddenFrom: mentionedUsers.length > 0 ? mentionedUsers : undefined
+      hiddenFrom: filteredHiddenUsers.length > 0 ? filteredHiddenUsers : undefined
     };
     
     setSuggestedTiles([...suggestedTiles, newSuggestion]);
@@ -1064,8 +1068,8 @@ const GameBoard = () => {
                       
                       // Check if this message should be hidden from current user
                       const shouldHideFromUser = 
-                        (isSuggestionMessage && msg.suggestion.hiddenFrom && msg.suggestion.hiddenFrom.includes(currentUser)) ||
-                        (isItemMessage && msg.item.hiddenFrom && msg.item.hiddenFrom.includes(currentUser));
+                        (isSuggestionMessage && msg.suggestion.hiddenFrom && msg.suggestion.hiddenFrom.includes(currentUser) && !isGameCreator) ||
+                        (isItemMessage && msg.item.hiddenFrom && msg.item.hiddenFrom.includes(currentUser) && !isGameCreator);
                       
                       // Get appropriate message text (handling @mentions)
                       let messageText = msg.message;
@@ -1120,8 +1124,8 @@ const GameBoard = () => {
                               </div>
                             )}
                             
-                            {/* Tile suggestion approval button - visible to game creator or admin */}
-                            {isSuggestionMessage && !gameStarted && (isGameCreator || isAdmin) && !shouldHideFromUser && (
+                            {/* Tile suggestion approval button - visible only to game creator, even if mentioned */}
+                            {isSuggestionMessage && !gameStarted && isGameCreator && (
                               <div className="mt-2 flex justify-end">
                                 <button 
                                   className="btn-primary text-xs px-2 py-1"
