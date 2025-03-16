@@ -85,6 +85,9 @@ const BoardBuilder = () => {
               />
               <div className="flex justify-between text-xs text-gray-500 mt-1">
                 <span>{MIN_COLUMNS}</span>
+                {Array.from({ length: MAX_COLUMNS - MIN_COLUMNS - 1 }).map((_, i) => (
+                  <span key={i}>{MIN_COLUMNS + i + 1}</span>
+                ))}
                 <span>{MAX_COLUMNS}</span>
               </div>
             </div>
@@ -105,6 +108,9 @@ const BoardBuilder = () => {
               />
               <div className="flex justify-between text-xs text-gray-500 mt-1">
                 <span>{MIN_ROWS}</span>
+                {Array.from({ length: MAX_ROWS - MIN_ROWS - 1 }).map((_, i) => (
+                  <span key={i}>{MIN_ROWS + i + 1}</span>
+                ))}
                 <span>{MAX_ROWS}</span>
               </div>
             </div>

@@ -41,6 +41,7 @@ const GameBoard = () => {
   const [tilePhotos, setTilePhotos] = useState([]); // Store photos for each tile
   const [tileApprovals, setTileApprovals] = useState([]); // Store approvals for each tile
   const [tileDenials, setTileDenials] = useState([]); // Store denials for each tile
+  const [tileNotes, setTileNotes] = useState([]); // Store notes for each tile
   const [winner, setWinner] = useState(null);
   // eslint-disable-next-line no-unused-vars
   const [users, setUsers] = useState(['JHarvey', 'User2', 'User3', 'User4']); // Simulated users for testing
@@ -87,6 +88,7 @@ const GameBoard = () => {
       setTilePhotos(Array(totalTiles).fill(null));
       setTileApprovals(Array(totalTiles).fill([]));
       setTileDenials(Array(totalTiles).fill([]));
+      setTileNotes(Array(totalTiles).fill(null));
     }
   }, [game]);
 
@@ -127,6 +129,17 @@ const GameBoard = () => {
     
     setItems([...items, newItem]);
     setItemInput('');
+    
+    // Add a message to the chat about the new item
+    const newMessage = {
+      id: chat.length + 1,
+      sender: 'System',
+      message: `${currentUser} added a new item: "${text}"`,
+      timestamp: new Date().toISOString(),
+      item: newItem
+    };
+    
+    setChat([...chat, newMessage]);
   };
 
   // Handle friend invitation by username
@@ -222,6 +235,9 @@ const GameBoard = () => {
     
     setChat([...chat, newMessage]);
     setTileInputSuggestion('');
+    
+    // Hide the suggest tile menu after submission
+    document.getElementById('suggestTileMenu').classList.add('hidden');
   };
 
   // Handle approving a suggested tile
@@ -230,10 +246,17 @@ const GameBoard = () => {
     
     if (!suggestion) return;
     
+    // Check if the suggestion text contains @ mentions
+    const text = suggestion.text;
+    const mentionRegex = /@(\w+)/g;
+    const matches = [...text.matchAll(mentionRegex)];
+    const mentionedUsers = matches.map(match => match[1]);
+    
     // Add to items
     const newItem = {
       id: Date.now(),
-      text: suggestion.text
+      text: suggestion.text,
+      hiddenFrom: mentionedUsers.length > 0 ? mentionedUsers : undefined
     };
     
     setItems([...items, newItem]);
@@ -246,7 +269,8 @@ const GameBoard = () => {
       id: chat.length + 1,
       sender: 'System',
       message: `${currentUser} approved "${suggestion.text}" and added it to the game.`,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      item: newItem
     };
     
     setChat([...chat, newMessage]);
@@ -276,16 +300,29 @@ const GameBoard = () => {
       return;
     }
     
-    // Assign random items to tiles
-    const shuffledItems = [...items].sort(() => Math.random() - 0.5);
-    const newTileContents = Array(game.rows * game.columns).fill(null).map((_, index) => {
-      if (index < shuffledItems.length && index < game.rows * game.columns) {
-        return shuffledItems[index];
-      }
-      return null;
+    // In a real app, you would generate unique boards for each user
+    // For now, we'll simulate this for the current user
+    const userBoards = {};
+    
+    // Create a board for each user
+    users.forEach(user => {
+      // Assign random items to tiles for this user
+      const shuffledItems = [...items].sort(() => Math.random() - 0.5);
+      const userTileContents = Array(game.rows * game.columns).fill(null).map((_, index) => {
+        if (index < shuffledItems.length && index < game.rows * game.columns) {
+          return shuffledItems[index];
+        }
+        return null;
+      });
+      
+      userBoards[user] = userTileContents;
     });
     
-    setTileContents(newTileContents);
+    // For the current user (in a real app, this would be pulled from their specific board)
+    // This simulates each user seeing their own randomized board
+    const currentUserBoard = userBoards[currentUser] || generateUserBoard();
+    
+    setTileContents(currentUserBoard);
     setGameStarted(true);
     
     // Add system message about game start
@@ -298,8 +335,20 @@ const GameBoard = () => {
     
     setChat([...chat, newMessage]);
     
-    // Force switch to board tab when game starts
-    setActiveTab('board');
+    // Navigate to chat tab when game starts
+    setActiveTab('chat');
+  };
+  
+  // Generate a board for the current user
+  const generateUserBoard = () => {
+    // Assign random items to tiles
+    const shuffledItems = [...items].sort(() => Math.random() - 0.5);
+    return Array(game.rows * game.columns).fill(null).map((_, index) => {
+      if (index < shuffledItems.length && index < game.rows * game.columns) {
+        return shuffledItems[index];
+      }
+      return null;
+    });
   };
 
   // Handle tile click
@@ -324,6 +373,18 @@ const GameBoard = () => {
   const isTileHiddenFromUser = (tile) => {
     if (!tile || !tile.hiddenFrom) return false;
     return tile.hiddenFrom.includes(currentUser);
+  };
+
+  // Get display text for an item based on @mentions
+  const getItemDisplayText = (item) => {
+    if (!item) return '';
+    
+    // If the current user is mentioned in the item, show "A tile about you!"
+    if (item.hiddenFrom && item.hiddenFrom.includes(currentUser)) {
+      return "A tile about you!";
+    }
+    
+    return item.text;
   };
 
   // Function to get required approvals count
@@ -400,6 +461,13 @@ const GameBoard = () => {
       newClaimedTiles[tileIndex] = true;
       setClaimedTiles(newClaimedTiles);
       
+      // If there's a note, add it to the tile notes
+      if (tileNote.trim()) {
+        const newTileNotes = [...tileNotes];
+        newTileNotes[tileIndex] = tileNote.trim();
+        setTileNotes(newTileNotes);
+      }
+      
       // Check for win condition
       checkWinCondition(newClaimedTiles);
       
@@ -421,7 +489,7 @@ const GameBoard = () => {
     const newMessage = {
       id: messageId,
       sender: 'System',
-      message: `${currentUser} claimed the "${tile.text}" tile`,
+      message: `${currentUser} claimed the "${getItemDisplayText(tile)}" tile`,
       timestamp: new Date().toISOString(),
       claimInfo: {
         tileIndex,
@@ -442,6 +510,19 @@ const GameBoard = () => {
     }]);
   };
 
+  // Handle adding a note to a tile without claiming it
+  const handleAddNote = () => {
+    if (!selectedTile || !tileNote.trim()) return;
+    
+    // Update tile notes array
+    const newTileNotes = [...tileNotes];
+    newTileNotes[selectedTile.index] = tileNote.trim();
+    setTileNotes(newTileNotes);
+    
+    // Close the popup
+    setSelectedTile(null);
+  };
+
   // Handle claim button click
   const handleClaimTile = () => {
     if (!selectedTile || winner) return;
@@ -450,6 +531,13 @@ const GameBoard = () => {
     const newClaimedTiles = [...claimedTiles];
     newClaimedTiles[selectedTile.index] = true;
     setClaimedTiles(newClaimedTiles);
+    
+    // If there's a note, add it to the tile notes
+    if (tileNote.trim()) {
+      const newTileNotes = [...tileNotes];
+      newTileNotes[selectedTile.index] = tileNote.trim();
+      setTileNotes(newTileNotes);
+    }
     
     // Add a claim message (without photo)
     addClaimMessage(selectedTile.index);
@@ -480,7 +568,7 @@ const GameBoard = () => {
       const newMessage = {
         id: chat.length + 1,
         sender: 'System',
-        message: `${currentUser} approved the "${tileContents[tileIndex].text}" tile claim`,
+        message: `${currentUser} approved the "${getItemDisplayText(tileContents[tileIndex])}" tile claim`,
         timestamp: new Date().toISOString()
       };
       setChat([...chat, newMessage]);
@@ -504,7 +592,7 @@ const GameBoard = () => {
       const newMessage = {
         id: chat.length + 1,
         sender: 'System',
-        message: `${currentUser} denied the "${tileContents[tileIndex].text}" tile claim`,
+        message: `${currentUser} denied the "${getItemDisplayText(tileContents[tileIndex])}" tile claim`,
         timestamp: new Date().toISOString()
       };
       setChat([...chat, newMessage]);
@@ -688,7 +776,12 @@ const GameBoard = () => {
                       {isHiddenFromUser ? (
                         <span className="text-center">Hidden</span>
                       ) : gameStarted && tileContents[index] ? (
-                        <span className="text-center">{tileContents[index].text}</span>
+                        <div className="text-center flex flex-col">
+                          <span>{getItemDisplayText(tileContents[index])}</span>
+                          {tileNotes[index] && (
+                            <span className="text-xs font-normal mt-1 text-gray-200">{tileNotes[index]}</span>
+                          )}
+                        </div>
                       ) : (
                         index + 1
                       )}
@@ -706,71 +799,8 @@ const GameBoard = () => {
               className="w-full p-4"
             >
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
-                {/* Left column - Item input and list */}
-                {!gameStarted && (
-                  <div className="md:col-span-1 bg-white rounded-lg shadow-lg p-4 flex flex-col">
-                    <h2 className="text-xl font-bold mb-4">Game Items</h2>
-                    <p className="text-sm text-gray-600 mb-4">
-                      Add items for the game. You need at least {minItemsRequired} items.
-                      ({items.length} / {minItemsRequired})
-                    </p>
-                    
-                    <form onSubmit={handleAddItem} className="flex mb-4">
-                      <input
-                        type="text"
-                        className="input-field flex-grow mr-2"
-                        placeholder="Add an item... (use @ to hide from users)"
-                        value={itemInput}
-                        onChange={(e) => setItemInput(e.target.value)}
-                        disabled={gameStarted}
-                      />
-                      <motion.button
-                        type="submit"
-                        className="btn-primary"
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        disabled={!itemInput.trim() || gameStarted}
-                      >
-                        <FaPlus />
-                      </motion.button>
-                    </form>
-                    
-                    {hasEnoughItems && !gameStarted && (
-                      <motion.button
-                        onClick={handleStartGame}
-                        className="btn-success w-full mb-4 flex items-center justify-center"
-                        whileHover={{ scale: 1.03 }}
-                        whileTap={{ scale: 0.98 }}
-                      >
-                        <FaPlay className="mr-2" /> Start Game
-                      </motion.button>
-                    )}
-                    
-                    <div className="flex-grow overflow-y-auto bg-gray-50 rounded-lg p-2">
-                      {items.length > 0 ? (
-                        <ul className="space-y-2">
-                          {items.map((item, index) => (
-                            <li key={item.id} className="bg-white p-3 rounded-md shadow-sm flex justify-between items-center">
-                              <span className="font-medium">
-                                {index + 1}. {item.text}
-                                {item.hiddenFrom && item.hiddenFrom.length > 0 && (
-                                  <span className="text-xs text-gray-500 ml-2">
-                                    (Hidden from: {item.hiddenFrom.join(', ')})
-                                  </span>
-                                )}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="text-center text-gray-500 py-4">No items added yet</p>
-                      )}
-                    </div>
-                  </div>
-                )}
-                
-                {/* Right column - Chat */}
-                <div className={`${gameStarted ? 'md:col-span-3' : 'md:col-span-2'} bg-white rounded-lg shadow-lg p-4 flex flex-col`}>
+                {/* Chat component - appears first on mobile */}
+                <div className={`${gameStarted ? 'md:col-span-3' : 'md:col-span-2'} order-1 bg-white rounded-lg shadow-lg p-4 flex flex-col`}>
                   <div className="flex justify-between items-center mb-4">
                     <h2 className="text-xl font-bold">Game Chat</h2>
                     
@@ -878,13 +908,26 @@ const GameBoard = () => {
                     </div>
                   </div>
                   <div className="flex-grow overflow-y-auto mb-4 p-2 bg-gray-50 rounded-lg">
-                    {chat.map((msg) => {
+                    {[...chat].reverse().map((msg) => {
                       // Check if this is a claim message that needs approval buttons
                       const isClaimMessage = msg.claimInfo !== undefined;
                       const tileIndex = isClaimMessage ? msg.claimInfo.tileIndex : null;
                       
                       // Check if this is a tile suggestion message
                       const isSuggestionMessage = msg.suggestion !== undefined;
+                      
+                      // Check if this is an item message with a mention
+                      const isItemMessage = msg.item !== undefined;
+                      
+                      // Get appropriate message text (handling @mentions)
+                      let messageText = msg.message;
+                      if (isItemMessage && msg.item.hiddenFrom && msg.item.hiddenFrom.includes(currentUser)) {
+                        messageText = `${currentUser} added a new item: "A tile about you!"`;
+                      } else if (isClaimMessage && tileContents[tileIndex] && 
+                                tileContents[tileIndex].hiddenFrom && 
+                                tileContents[tileIndex].hiddenFrom.includes(currentUser)) {
+                        messageText = `${msg.claimInfo.user} claimed the "A tile about you!" tile`;
+                      }
                       
                       // Determine if current user has already voted on this claim
                       const hasApproved = tileIndex !== null && tileApprovals[tileIndex]?.includes(currentUser);
@@ -902,7 +945,7 @@ const GameBoard = () => {
                             {msg.sender !== currentUser && (
                               <div className="font-bold text-sm">{msg.sender}</div>
                             )}
-                            <p>{msg.message}</p>
+                            <p>{messageText}</p>
                             
                             {/* Display attached photo if exists */}
                             {isClaimMessage && msg.claimInfo.photo && (
@@ -992,6 +1035,69 @@ const GameBoard = () => {
                     </motion.button>
                   </form>
                 </div>
+                
+                {/* Game Items component - appears second on mobile */}
+                {!gameStarted && (
+                  <div className="order-2 md:order-1 md:col-span-1 bg-white rounded-lg shadow-lg p-4 flex flex-col">
+                    <h2 className="text-xl font-bold mb-4">Game Items</h2>
+                    <p className="text-sm text-gray-600 mb-4">
+                      Add items for the game. You need at least {minItemsRequired} items.
+                      ({items.length} / {minItemsRequired})
+                    </p>
+                    
+                    <form onSubmit={handleAddItem} className="flex mb-4">
+                      <input
+                        type="text"
+                        className="input-field flex-grow mr-2"
+                        placeholder="Add an item... (use @ to hide from users)"
+                        value={itemInput}
+                        onChange={(e) => setItemInput(e.target.value)}
+                        disabled={gameStarted}
+                      />
+                      <motion.button
+                        type="submit"
+                        className="btn-primary"
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        disabled={!itemInput.trim() || gameStarted}
+                      >
+                        <FaPlus />
+                      </motion.button>
+                    </form>
+                    
+                    {hasEnoughItems && !gameStarted && (
+                      <motion.button
+                        onClick={handleStartGame}
+                        className="btn-success w-full mb-4 flex items-center justify-center"
+                        whileHover={{ scale: 1.03 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        <FaPlay className="mr-2" /> Start Game
+                      </motion.button>
+                    )}
+                    
+                    <div className="flex-grow overflow-y-auto bg-gray-50 rounded-lg p-2 max-h-[40vh]">
+                      {items.length > 0 ? (
+                        <ul className="space-y-2">
+                          {items.map((item, index) => (
+                            <li key={item.id} className="bg-white p-3 rounded-md shadow-sm flex justify-between items-center">
+                              <span className="font-medium">
+                                {index + 1}. {getItemDisplayText(item)}
+                                {item.hiddenFrom && item.hiddenFrom.length > 0 && (
+                                  <span className="text-xs text-gray-500 ml-2">
+                                    (Hidden from: {item.hiddenFrom.join(', ')})
+                                  </span>
+                                )}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-center text-gray-500 py-4">No items added yet</p>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </motion.div>
           )}
@@ -1016,13 +1122,23 @@ const GameBoard = () => {
               onClick={(e) => e.stopPropagation()}
             >
               <h2 className="text-2xl font-bold mb-4 text-center text-primary">
-                {selectedTile.item.text}
+                {getItemDisplayText(selectedTile.item)}
               </h2>
               
               <div className="mb-4">
-                <label className="block text-gray-700 font-bold mb-2" htmlFor="tileNote">
-                  Add a note:
-                </label>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="block text-gray-700 font-bold" htmlFor="tileNote">
+                    Add a note:
+                  </label>
+                  <button
+                    className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-full w-8 h-8 flex items-center justify-center"
+                    onClick={handleAddNote}
+                    disabled={!tileNote.trim()}
+                    title="Add note without claiming"
+                  >
+                    +
+                  </button>
+                </div>
                 <textarea
                   id="tileNote"
                   className="input-field min-h-[100px]"
