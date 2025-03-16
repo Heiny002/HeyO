@@ -58,6 +58,7 @@ const GameBoard = () => {
 
   // Add after user declaration around line 12
   const [isGameCreator, setIsGameCreator] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // Calculate minimum required items
   const calculateMinItems = (rows, columns) => {
@@ -81,6 +82,11 @@ const GameBoard = () => {
         setIsGameCreator(true);
       }
       
+      // Check if current user is an admin
+      if (user?.isAdmin) {
+        setIsAdmin(true);
+      }
+      
       setLoading(false);
     } else {
       // In a real app, you would fetch the game data from an API
@@ -102,10 +108,15 @@ const GameBoard = () => {
           setIsGameCreator(true);
         }
         
+        // Check if current user is an admin
+        if (user?.isAdmin) {
+          setIsAdmin(true);
+        }
+        
         setLoading(false);
       }, 1000);
     }
-  }, [id, location.state, currentUser]);
+  }, [id, location.state, currentUser, user]);
 
   // Load user-specific game state from localStorage
   useEffect(() => {
@@ -789,6 +800,13 @@ const GameBoard = () => {
                   Winner: {winner}
                 </div>
               )}
+              
+              {isAdmin && (
+                <div className="ml-4 bg-blue-100 text-blue-800 px-3 py-1 rounded-full flex items-center">
+                  <FaCog className="mr-1 text-blue-600" /> 
+                  Admin
+                </div>
+              )}
             </div>
             
             {/* Admin button for generating dummy items */}
@@ -1102,8 +1120,8 @@ const GameBoard = () => {
                               </div>
                             )}
                             
-                            {/* Tile suggestion approval button - only visible to game creator */}
-                            {isSuggestionMessage && !gameStarted && isGameCreator && !shouldHideFromUser && (
+                            {/* Tile suggestion approval button - visible to game creator or admin */}
+                            {isSuggestionMessage && !gameStarted && (isGameCreator || isAdmin) && !shouldHideFromUser && (
                               <div className="mt-2 flex justify-end">
                                 <button 
                                   className="btn-primary text-xs px-2 py-1"
@@ -1181,7 +1199,7 @@ const GameBoard = () => {
                       ({items.length} / {minItemsRequired})
                     </p>
                     
-                    {isGameCreator && (
+                    {(isGameCreator || isAdmin) && (
                       <form onSubmit={handleAddItem} className="flex mb-4">
                         <input
                           type="text"
@@ -1203,7 +1221,7 @@ const GameBoard = () => {
                       </form>
                     )}
                     
-                    {hasEnoughItems && !gameStarted && isGameCreator && (
+                    {hasEnoughItems && !gameStarted && (isGameCreator || isAdmin) && (
                       <motion.button
                         onClick={handleStartGame}
                         className="btn-success w-full mb-4 flex items-center justify-center"
@@ -1221,7 +1239,7 @@ const GameBoard = () => {
                             <li key={item.id} className="bg-white p-3 rounded-md shadow-sm flex justify-between items-center">
                               <span className="font-medium">
                                 {index + 1}. {getItemDisplayText(item)}
-                                {isGameCreator && item.hiddenFrom && item.hiddenFrom.length > 0 && (
+                                {(isGameCreator || isAdmin) && item.hiddenFrom && item.hiddenFrom.length > 0 && (
                                   <span className="text-xs text-gray-500 ml-2">
                                     (Hidden from: {item.hiddenFrom.join(', ')})
                                   </span>
