@@ -308,15 +308,12 @@ const GameBoard = () => {
     const matches = [...text.matchAll(mentionRegex)];
     const mentionedUsers = matches.map(match => match[1]);
     
-    // Filter out game creator from hiddenFrom array
-    const creatorName = game?.createdBy;
-    const filteredHiddenUsers = mentionedUsers.filter(user => user !== creatorName);
-    
+    // Create suggestion with proper hiddenFrom
     const newSuggestion = {
       id: Date.now(),
       text: text,
       suggestedBy: currentUser,
-      hiddenFrom: filteredHiddenUsers.length > 0 ? filteredHiddenUsers : undefined
+      hiddenFrom: mentionedUsers.length > 0 ? mentionedUsers : undefined
     };
     
     setSuggestedTiles([...suggestedTiles, newSuggestion]);
@@ -343,20 +340,11 @@ const GameBoard = () => {
     
     if (!suggestion) return;
     
-    // Check if the suggestion text contains @ mentions
-    const text = suggestion.text;
-    const mentionRegex = /@(\w+)/g;
-    const matches = [...text.matchAll(mentionRegex)];
-    const mentionedUsers = matches.map(match => match[1]);
-    
-    // Exclude game creator from hiddenFrom list if they are the one approving
-    const filteredHiddenUsers = mentionedUsers.filter(user => user !== currentUser);
-    
-    // Add to items
+    // Add to items - preserve the hiddenFrom property completely
     const newItem = {
       id: Date.now(),
       text: suggestion.text,
-      hiddenFrom: filteredHiddenUsers.length > 0 ? filteredHiddenUsers : undefined
+      hiddenFrom: suggestion.hiddenFrom
     };
     
     setItems([...items, newItem]);
@@ -368,7 +356,7 @@ const GameBoard = () => {
     const newMessage = {
       id: chat.length + 1,
       sender: 'System',
-      message: `${currentUser} approved "${suggestion.text}" and added it to the game.`,
+      message: `${currentUser} approved and added a new tile to the game.`,
       timestamp: new Date().toISOString(),
       item: newItem
     };
@@ -1069,18 +1057,13 @@ const GameBoard = () => {
                       // Check if this is an item message with a mention
                       const isItemMessage = msg.item !== undefined;
                       
-                      // Check if this message should be hidden from current user
-                      const shouldHideFromUser = 
-                        (isSuggestionMessage && msg.suggestion.hiddenFrom && msg.suggestion.hiddenFrom.includes(currentUser) && !isGameCreator) ||
-                        (isItemMessage && msg.item.hiddenFrom && msg.item.hiddenFrom.includes(currentUser) && !isGameCreator);
-                      
                       // Get appropriate message text (handling @mentions)
                       let messageText = msg.message;
-                      if (shouldHideFromUser) {
-                        messageText = `A new tile about you was added to the game`;
-                      } else if (isClaimMessage && tileContents[tileIndex] && 
-                                tileContents[tileIndex].hiddenFrom && 
-                                tileContents[tileIndex].hiddenFrom.includes(currentUser)) {
+                      
+                      // Special handling for claim messages related to hidden tiles
+                      if (isClaimMessage && tileContents[tileIndex] && 
+                          tileContents[tileIndex].hiddenFrom && 
+                          tileContents[tileIndex].hiddenFrom.includes(currentUser)) {
                         messageText = `${msg.claimInfo.user} claimed the "A tile about you!" tile`;
                       }
                       
@@ -1106,7 +1089,16 @@ const GameBoard = () => {
                             {msg.sender !== currentUser && (
                               <div className="font-bold text-sm">{msg.sender}</div>
                             )}
-                            <p>{messageText}</p>
+                            
+                            {/* Message content with proper handling of mentions */}
+                            <p>
+                              {isSuggestionMessage && msg.suggestion.hiddenFrom && msg.suggestion.hiddenFrom.includes(currentUser)
+                                ? `${msg.suggestion.suggestedBy} suggested a tile about you!`
+                                : isItemMessage && msg.item.hiddenFrom && msg.item.hiddenFrom.includes(currentUser)
+                                  ? `A new tile about you was added to the game`
+                                  : messageText
+                              }
+                            </p>
                             
                             {/* Display attached photo if exists */}
                             {isClaimMessage && msg.claimInfo.photo && (
@@ -1127,7 +1119,7 @@ const GameBoard = () => {
                               </div>
                             )}
                             
-                            {/* Tile suggestion approval button - ALWAYS visible to game creator */}
+                            {/* ALWAYS show approval button to game creator for ALL suggestions */}
                             {isSuggestionMessage && !gameStarted && isGameCreator && (
                               <div className="mt-2 flex justify-end">
                                 <button 
