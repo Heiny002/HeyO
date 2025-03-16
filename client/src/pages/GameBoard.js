@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaArrowLeft, FaComments, FaGamepad, FaPlus, FaPlay, FaCog, FaCamera, FaImage } from 'react-icons/fa';
+import { FaArrowLeft, FaComments, FaGamepad, FaPlus, FaPlay, FaCog, FaCamera, FaImage, FaTrophy } from 'react-icons/fa';
 
 const GameBoard = () => {
   const { id } = useParams();
@@ -26,6 +26,10 @@ const GameBoard = () => {
   const [selectedTile, setSelectedTile] = useState(null);
   const [tileNote, setTileNote] = useState('');
   const fileInputRef = useRef(null);
+  
+  // Add state to track claimed tiles and winners
+  const [claimedTiles, setClaimedTiles] = useState([]);
+  const [winner, setWinner] = useState(null);
 
   // Calculate minimum required items
   const calculateMinItems = (rows, columns) => {
@@ -56,6 +60,14 @@ const GameBoard = () => {
       }, 1000);
     }
   }, [id, location.state]);
+
+  // Initialize claimedTiles array when game loads or changes
+  useEffect(() => {
+    if (game) {
+      const totalTiles = game.rows * game.columns;
+      setClaimedTiles(Array(totalTiles).fill(false));
+    }
+  }, [game]);
 
   // Handle chat message submission
   const handleSendMessage = (e) => {
@@ -128,7 +140,7 @@ const GameBoard = () => {
 
   // Handle tile click
   const handleTileClick = (index) => {
-    if (gameStarted && tileContents[index]) {
+    if (gameStarted && tileContents[index] && !claimedTiles[index] && !winner) {
       setSelectedTile({
         index,
         item: tileContents[index]
@@ -137,19 +149,79 @@ const GameBoard = () => {
     }
   };
 
+  // Check for win condition
+  const checkWinCondition = (newClaimedTiles) => {
+    if (!game) return false;
+    
+    const { rows, columns } = game;
+    
+    // Check rows
+    for (let row = 0; row < rows; row++) {
+      let rowComplete = true;
+      for (let col = 0; col < columns; col++) {
+        const index = row * columns + col;
+        if (!newClaimedTiles[index]) {
+          rowComplete = false;
+          break;
+        }
+      }
+      if (rowComplete) {
+        setWinner("Row " + (row + 1));
+        return true;
+      }
+    }
+    
+    // Check columns
+    for (let col = 0; col < columns; col++) {
+      let colComplete = true;
+      for (let row = 0; row < rows; row++) {
+        const index = row * columns + col;
+        if (!newClaimedTiles[index]) {
+          colComplete = false;
+          break;
+        }
+      }
+      if (colComplete) {
+        setWinner("Column " + (col + 1));
+        return true;
+      }
+    }
+    
+    return false;
+  };
+
   // Handle claim button click
   const handleClaimTile = () => {
+    if (!selectedTile || winner) return;
+    
+    // Update claimed tiles array
+    const newClaimedTiles = [...claimedTiles];
+    newClaimedTiles[selectedTile.index] = true;
+    setClaimedTiles(newClaimedTiles);
+    
+    // Check for win condition
+    checkWinCondition(newClaimedTiles);
+    
     // In a real app, you would save this data to a database
     console.log(`Claimed tile ${selectedTile.index + 1} with note: ${tileNote}`);
     
     // Close the popup
     setSelectedTile(null);
+    
+    // Add a system message about claiming
+    const newMessage = {
+      id: chat.length + 1,
+      sender: 'System',
+      message: `Tile ${selectedTile.index + 1} (${selectedTile.item.text}) has been claimed!`,
+      timestamp: new Date().toISOString()
+    };
+    setChat([...chat, newMessage]);
   };
 
   // Handle photo selection
   const handlePhotoSelect = (type) => {
     if (type === 'camera') {
-      // For mobile devices to capture photo
+      // For mobile devices to capture photo directly from camera
       if (fileInputRef.current) {
         fileInputRef.current.setAttribute('capture', 'environment');
         fileInputRef.current.setAttribute('accept', 'image/*');
@@ -198,6 +270,11 @@ const GameBoard = () => {
           if (e.target.files && e.target.files[0]) {
             console.log('Selected file:', e.target.files[0]);
             // In a real app, you would upload this file to a server
+            
+            // If we have a selected tile, we can associate this photo with it
+            if (selectedTile) {
+              console.log(`Photo attached to tile ${selectedTile.index + 1}`);
+            }
           }
         }}
       />
@@ -214,6 +291,13 @@ const GameBoard = () => {
                 <FaArrowLeft />
               </button>
               <h1 className="text-2xl font-bold">{game.name}</h1>
+              
+              {winner && (
+                <div className="ml-4 bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full flex items-center">
+                  <FaTrophy className="mr-1 text-yellow-600" /> 
+                  Winner: {winner}
+                </div>
+              )}
             </div>
             
             {/* Admin button for generating dummy items */}
@@ -275,28 +359,36 @@ const GameBoard = () => {
                   height: `calc(100vh - 200px)`
                 }}
               >
-                {Array.from({ length: game.rows * game.columns }).map((_, index) => (
-                  <motion.div
-                    key={index}
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    transition={{ 
-                      duration: 0.3,
-                      delay: index * 0.02, 
-                      type: 'spring',
-                      stiffness: 260,
-                      damping: 20 
-                    }}
-                    whileHover={{ scale: 0.95 }}
-                    whileTap={{ scale: 0.9 }}
-                    className="bg-gradient-to-br from-primary-light to-secondary-light rounded-lg shadow-md cursor-pointer flex items-center justify-center font-bold text-white text-lg p-2 overflow-hidden"
-                    onClick={() => handleTileClick(index)}
-                  >
-                    {gameStarted && tileContents[index] 
-                      ? <span className="text-center">{tileContents[index].text}</span>
-                      : index + 1}
-                  </motion.div>
-                ))}
+                {Array.from({ length: game.rows * game.columns }).map((_, index) => {
+                  // Determine if this tile is claimed
+                  const isClaimed = claimedTiles[index];
+                  
+                  return (
+                    <motion.div
+                      key={index}
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ 
+                        duration: 0.3,
+                        delay: index * 0.02, 
+                        type: 'spring',
+                        stiffness: 260,
+                        damping: 20 
+                      }}
+                      whileHover={{ scale: isClaimed ? 1 : 0.95 }}
+                      whileTap={{ scale: isClaimed ? 1 : 0.9 }}
+                      className={`rounded-lg shadow-md ${isClaimed 
+                        ? 'bg-gradient-to-br from-green-400 to-green-600 cursor-default' 
+                        : 'bg-gradient-to-br from-primary-light to-secondary-light cursor-pointer'
+                      } flex items-center justify-center font-bold text-white text-lg p-2 overflow-hidden`}
+                      onClick={() => !isClaimed && handleTileClick(index)}
+                    >
+                      {gameStarted && tileContents[index] 
+                        ? <span className="text-center">{tileContents[index].text}</span>
+                        : index + 1}
+                    </motion.div>
+                  );
+                })}
               </div>
             </motion.div>
           ) : (
@@ -473,7 +565,39 @@ const GameBoard = () => {
                   </motion.button>
                 </div>
               </div>
+
+              {/* Show winning notification if there is a winner */}
+              {winner && (
+                <motion.div 
+                  className="mt-4 p-3 bg-yellow-100 text-yellow-800 rounded-lg text-center"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                >
+                  <FaTrophy className="inline-block mr-2 text-yellow-600" />
+                  Congratulations! {winner} completed!
+                </motion.div>
+              )}
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Winner notification */}
+      <AnimatePresence>
+        {winner && !selectedTile && (
+          <motion.div
+            className="fixed bottom-4 right-4 bg-yellow-100 text-yellow-800 p-4 rounded-lg shadow-lg z-40"
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+          >
+            <div className="flex items-center">
+              <FaTrophy className="text-2xl text-yellow-600 mr-3" />
+              <div>
+                <h3 className="font-bold text-lg">Winner!</h3>
+                <p>{winner} has been completed!</p>
+              </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

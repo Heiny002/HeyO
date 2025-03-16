@@ -7,19 +7,24 @@ module.exports = {
     extend: {
       colors: {
         primary: {
-          light: '#FF9D9D',
-          DEFAULT: '#FF5C5C',
-          dark: '#E53E3E',
+          light: '#FF5757',
+          DEFAULT: '#FF0000',
+          dark: '#CC0000',
         },
         secondary: {
-          light: '#9DFFFF',
-          DEFAULT: '#5CE1FF',
-          dark: '#3EB8E5',
+          light: '#5785FF',
+          DEFAULT: '#0055FF',
+          dark: '#0044CC',
         },
         accent: {
-          light: '#FFD79D',
-          DEFAULT: '#FFBB5C',
-          dark: '#E59C3E',
+          light: '#FFDD57',
+          DEFAULT: '#FFCC00',
+          dark: '#CCAA00',
+        },
+        success: {
+          light: '#57FF5E',
+          DEFAULT: '#00CC00',
+          dark: '#009900',
         },
         background: '#FAFAFA',
       },
@@ -31,11 +36,17 @@ module.exports = {
         'float': 'float 3s ease-in-out infinite',
         'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         'bounce-slow': 'bounce 2s infinite',
+        'spin-slow': 'spin 8s linear infinite',
+        'wiggle': 'wiggle 1s ease-in-out infinite',
       },
       keyframes: {
         float: {
           '0%, 100%': { transform: 'translateY(0)' },
           '50%': { transform: 'translateY(-10px)' },
+        },
+        wiggle: {
+          '0%, 100%': { transform: 'rotate(-3deg)' },
+          '50%': { transform: 'rotate(3deg)' },
         }
       },
     },

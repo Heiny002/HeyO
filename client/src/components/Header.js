@@ -2,7 +2,7 @@ import React, { useContext } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { motion } from 'framer-motion';
-import { FaSignOutAlt, FaGamepad } from 'react-icons/fa';
+import { FaSignOutAlt } from 'react-icons/fa';
 
 const Header = () => {
   const { isAuthenticated, user, logout } = useContext(AuthContext);
@@ -15,7 +15,7 @@ const Header = () => {
   
   return (
     <motion.header 
-      className="bg-white shadow-md py-4"
+      className="bg-white shadow-md py-4 rainbow-border"
       initial={{ y: -50, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.5 }}
@@ -23,7 +23,7 @@ const Header = () => {
       <div className="container mx-auto px-4 flex justify-between items-center">
         <Link to={isAuthenticated ? '/games' : '/login'}>
           <motion.h1 
-            className="text-3xl font-heading font-extrabold logo-text"
+            className="text-3xl font-heading font-extrabold bg-gradient-text"
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
           >
@@ -43,7 +43,7 @@ const Header = () => {
             </motion.span>
             
             <motion.button
-              className="flex items-center gap-2 px-4 py-2 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 rounded-full bg-primary text-white hover:bg-primary-dark transition-colors shadow-md"
               onClick={handleLogout}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
@@ -55,7 +55,7 @@ const Header = () => {
           <div className="flex gap-2">
             <Link to="/login">
               <motion.button 
-                className="btn-secondary"
+                className="btn-secondary pop-out"
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
               >
@@ -64,7 +64,7 @@ const Header = () => {
             </Link>
             <Link to="/register">
               <motion.button 
-                className="btn-primary"
+                className="btn-primary pop-out"
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
               >
