@@ -58,6 +58,21 @@ const db = new sqlite3.Database('./database.sqlite', (err) => {
         });
       }
     });
+
+    // Create game invitations table
+    db.run(`CREATE TABLE IF NOT EXISTS game_invitations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      game_id TEXT NOT NULL,
+      invited_username TEXT NOT NULL,
+      status TEXT DEFAULT 'pending',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`, (err) => {
+      if (err) {
+        console.error('Error creating game_invitations table:', err.message);
+      } else {
+        console.log('Game invitations table created or already exists');
+      }
+    });
   }
 });
 
@@ -163,6 +178,77 @@ app.post('/api/login', (req, res) => {
   });
 });
 
+// Search users endpoint
+app.get('/api/users/search', authenticateToken, (req, res) => {
+  const searchTerm = req.query.term;
+  if (!searchTerm) {
+    return res.json({ users: [] });
+  }
+
+  db.all(
+    'SELECT username FROM users WHERE username LIKE ? LIMIT 5',
+    [`${searchTerm}%`],
+    (err, users) => {
+      if (err) {
+        return res.status(500).json({ message: 'Server error', error: err.message });
+      }
+      res.json({ users: users.map(user => user.username) });
+    }
+  );
+});
+
+// Get invited games for a user
+app.get('/api/games/invited', authenticateToken, (req, res) => {
+  const username = req.user.username;
+  
+  db.all(
+    `SELECT g.* FROM game_invitations gi 
+     JOIN games g ON gi.game_id = g.id 
+     WHERE gi.invited_username = ? AND gi.status = 'pending'`,
+    [username],
+    (err, games) => {
+      if (err) {
+        return res.status(500).json({ message: 'Server error', error: err.message });
+      }
+      res.json({ games });
+    }
+  );
+});
+
+// Create game invitation
+app.post('/api/games/:gameId/invite', authenticateToken, (req, res) => {
+  const { gameId } = req.params;
+  const { username } = req.body;
+  
+  db.run(
+    'INSERT INTO game_invitations (game_id, invited_username) VALUES (?, ?)',
+    [gameId, username],
+    (err) => {
+      if (err) {
+        return res.status(500).json({ message: 'Server error', error: err.message });
+      }
+      res.json({ message: 'Invitation sent successfully' });
+    }
+  );
+});
+
+// Accept/reject game invitation
+app.put('/api/games/invite/:inviteId', authenticateToken, (req, res) => {
+  const { inviteId } = req.params;
+  const { status } = req.body; // 'accepted' or 'rejected'
+  
+  db.run(
+    'UPDATE game_invitations SET status = ? WHERE id = ?',
+    [status, inviteId],
+    (err) => {
+      if (err) {
+        return res.status(500).json({ message: 'Server error', error: err.message });
+      }
+      res.json({ message: 'Invitation updated successfully' });
+    }
+  );
+});
+
 // Protected route example
 app.get('/api/user', authenticateToken, (req, res) => {
   res.json({ user: req.user });
@@ -178,6 +264,7 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // Start server
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
+  console.log(`Access the app from other devices at http://192.168.0.28:${PORT}`);
 }); 
