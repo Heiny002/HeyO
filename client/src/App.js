@@ -14,20 +14,32 @@ import GameBoard from './pages/GameBoard';
 import Header from './components/Header';
 import LoadingSpinner from './components/LoadingSpinner';
 
-// Protected route component
+/**
+ * ProtectedRoute Component
+ * A wrapper component that ensures only authenticated users can access protected routes
+ * Redirects to login page if user is not authenticated
+ */
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, isLoading } = useContext(AuthContext);
   
+  // Show loading spinner while checking authentication status
   if (isLoading) {
     return <LoadingSpinner />;
   }
   
+  // Redirect to login if not authenticated, otherwise render protected content
   return isAuthenticated ? children : <Navigate to="/login" replace />;
 };
 
+/**
+ * Main App Component
+ * Handles routing and layout structure for the entire application
+ * Uses Framer Motion for smooth page transitions
+ */
 function App() {
   const { isLoading } = useContext(AuthContext);
   
+  // Show loading spinner while app is initializing
   if (isLoading) {
     return <LoadingSpinner />;
   }
@@ -40,7 +52,7 @@ function App() {
       transition={{ duration: 0.5 }}
     >
       <Routes>
-        {/* Auth Routes */}
+        {/* Authentication Routes - Public Access */}
         <Route path="/login" element={
           <>
             <Header />
@@ -64,7 +76,7 @@ function App() {
           </>
         } />
         
-        {/* Game Routes - Protected */}
+        {/* Game Routes - Protected Access */}
         <Route path="/games" element={
           <ProtectedRoute>
             <Header />
@@ -88,7 +100,7 @@ function App() {
           </ProtectedRoute>
         } />
         
-        {/* Full Screen Game Route */}
+        {/* Full Screen Game Route - Protected Access */}
         <Route path="/game/:id" element={
           <ProtectedRoute>
             <div className="flex flex-col">
@@ -100,7 +112,7 @@ function App() {
           </ProtectedRoute>
         } />
         
-        {/* Redirect to login by default */}
+        {/* Default Route - Redirects to Login */}
         <Route path="/" element={<Navigate to="/login" replace />} />
       </Routes>
     </motion.div>

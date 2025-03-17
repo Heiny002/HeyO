@@ -1,3 +1,9 @@
+/**
+ * Login Component
+ * Handles user authentication and login functionality
+ * Provides a form for users to enter their credentials
+ * Includes error handling and loading states
+ */
 import React, { useState, useContext, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
@@ -5,15 +11,22 @@ import { motion } from 'framer-motion';
 import { FaUser, FaLock, FaExclamationCircle, FaInfoCircle } from 'react-icons/fa';
 
 const Login = () => {
+  // Navigation hook for redirecting after successful login
+  const navigate = useNavigate();
+  
+  // Authentication context hook
+  const { login, isAuthenticated, error, clearError, allUsers } = useContext(AuthContext);
+  
+  // Form state
   const [formData, setFormData] = useState({
     username: '',
     password: ''
   });
+  
+  // UI state
   const [showError, setShowError] = useState(false);
-  
-  const { login, isAuthenticated, error, clearError, allUsers } = useContext(AuthContext);
-  const navigate = useNavigate();
-  
+  const [isLoading, setIsLoading] = useState(false);
+
   useEffect(() => {
     // If user is already authenticated, redirect to games page
     if (isAuthenticated) {
@@ -32,16 +45,35 @@ const Login = () => {
     }
   }, [isAuthenticated, navigate, error, clearError]);
   
+  /**
+   * Handles form input changes
+   * Updates the form state with new values
+   */
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
   };
-  
+
+  /**
+   * Handles form submission
+   * Attempts to log in the user with provided credentials
+   * Shows error messages if login fails
+   */
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    const success = await login(formData);
-    if (success) {
+    setShowError(false);
+    setIsLoading(true);
+
+    try {
+      await login(formData);
       navigate('/games');
+    } catch (err) {
+      setShowError(true);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -54,12 +86,14 @@ const Login = () => {
   
   return (
     <div className="page-container flex flex-col items-center justify-center">
+      {/* Login form container with animation */}
       <motion.div 
         className="w-full max-w-md"
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.5 }}
       >
+        {/* Header section with logo and title */}
         <motion.div 
           className="text-center mb-8"
           initial={{ scale: 0.9, opacity: 0 }}
@@ -70,6 +104,7 @@ const Login = () => {
           <p className="text-xl text-gray-600">Log in to start playing</p>
         </motion.div>
         
+        {/* Error message display */}
         {showError && (
           <motion.div 
             className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-4 flex items-center"
@@ -81,102 +116,92 @@ const Login = () => {
             <span>{error}</span>
           </motion.div>
         )}
-        
-        <div className="bg-white shadow-lg rounded-2xl p-8">
-          <form onSubmit={handleSubmit}>
-            <div className="mb-4">
-              <label className="block text-gray-700 mb-2" htmlFor="username">
-                Username
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <FaUser className="text-gray-400" />
-                </div>
-                <input
-                  type="text"
-                  id="username"
-                  name="username"
-                  className="input-field pl-10"
-                  placeholder="Enter your username"
-                  value={formData.username}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-            </div>
-            
-            <div className="mb-6">
-              <label className="block text-gray-700 mb-2" htmlFor="password">
-                Password
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <FaLock className="text-gray-400" />
-                </div>
-                <input
-                  type="password"
-                  id="password"
-                  name="password"
-                  className="input-field pl-10"
-                  placeholder="Enter your password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-            </div>
-            
-            <motion.button
-              type="submit"
-              className="w-full btn-primary mb-4"
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              Log In
-            </motion.button>
-            
-            <div className="text-center">
-              <p className="text-gray-600">
-                Don't have an account?{' '}
-                <Link to="/register" className="text-primary font-medium hover:underline">
-                  Register
-                </Link>
-              </p>
-            </div>
-          </form>
 
-          {/* Demo Users Section */}
-          <div className="mt-8 pt-6 border-t border-gray-200">
-            <div className="flex items-center mb-3">
-              <FaInfoCircle className="text-primary mr-2" />
-              <h3 className="text-lg font-medium text-gray-800">Simulation Accounts</h3>
-            </div>
-            <p className="text-sm text-gray-600 mb-4">
-              You can use any of these accounts with password: <strong>password</strong>
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              {allUsers.map(demoUser => (
-                <motion.button
-                  key={demoUser.id}
-                  className="flex items-center p-2 border border-gray-200 rounded-lg hover:bg-gray-50"
-                  onClick={() => fillDemoCredentials(demoUser.username)}
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <img 
-                    src={demoUser.avatar} 
-                    alt={`${demoUser.username} avatar`}
-                    className="w-8 h-8 rounded-full mr-2"
-                  />
-                  <div className="text-left">
-                    <div className="font-medium text-gray-800">{demoUser.username}</div>
-                    <div className="text-xs text-gray-500">
-                      {demoUser.isAdmin ? 'Admin User' : 'Regular User'}
-                    </div>
+        {/* Login form */}
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Username input */}
+          <div>
+            <label htmlFor="username" className="block text-sm font-medium text-gray-700">
+              Username
+            </label>
+            <input
+              type="text"
+              id="username"
+              name="username"
+              value={formData.username}
+              onChange={handleChange}
+              required
+              className="input-field mt-1"
+              placeholder="Enter your username"
+            />
+          </div>
+
+          {/* Password input */}
+          <div>
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+              Password
+            </label>
+            <input
+              type="password"
+              id="password"
+              name="password"
+              value={formData.password}
+              onChange={handleChange}
+              required
+              className="input-field mt-1"
+              placeholder="Enter your password"
+            />
+          </div>
+
+          {/* Submit button */}
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="btn-primary w-full"
+          >
+            {isLoading ? 'Logging in...' : 'Log In'}
+          </button>
+        </form>
+
+        {/* Registration link */}
+        <p className="mt-4 text-center text-gray-600">
+          Don't have an account?{' '}
+          <Link to="/register" className="text-primary hover:text-primary-dark">
+            Register here
+          </Link>
+        </p>
+
+        {/* Demo Users Section */}
+        <div className="mt-8 pt-6 border-t border-gray-200">
+          <div className="flex items-center mb-3">
+            <FaInfoCircle className="text-primary mr-2" />
+            <h3 className="text-lg font-medium text-gray-800">Simulation Accounts</h3>
+          </div>
+          <p className="text-sm text-gray-600 mb-4">
+            You can use any of these accounts with password: <strong>password</strong>
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {allUsers.map(demoUser => (
+              <motion.button
+                key={demoUser.id}
+                className="flex items-center p-2 border border-gray-200 rounded-lg hover:bg-gray-50"
+                onClick={() => fillDemoCredentials(demoUser.username)}
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <img 
+                  src={demoUser.avatar} 
+                  alt={`${demoUser.username} avatar`}
+                  className="w-8 h-8 rounded-full mr-2"
+                />
+                <div className="text-left">
+                  <div className="font-medium text-gray-800">{demoUser.username}</div>
+                  <div className="text-xs text-gray-500">
+                    {demoUser.isAdmin ? 'Admin User' : 'Regular User'}
                   </div>
-                </motion.button>
-              ))}
-            </div>
+                </div>
+              </motion.button>
+            ))}
           </div>
         </div>
       </motion.div>

@@ -3,6 +3,18 @@
   "version": "1.0.0",
   "description": "A fun mobile web app game",
   "main": "server.js",
+  
+  /**
+   * Project Scripts
+   * 
+   * Available commands:
+   * - start: Runs the server in production mode
+   * - dev: Runs the server with nodemon for development
+   * - client: Runs the React development server
+   * - dev-full: Runs both server and client in development mode
+   * - setup: Installs dependencies for both server and client
+   * - build: Builds the client for production
+   */
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
@@ -11,6 +23,18 @@
     "setup": "npm install && cd client && npm install",
     "build": "cd client && npm run build"
   },
+  
+  /**
+   * Production Dependencies
+   * Core packages required for the application to run
+   * 
+   * - bcryptjs: Password hashing
+   * - cors: Cross-origin resource sharing
+   * - dotenv: Environment variable management
+   * - express: Web server framework
+   * - jsonwebtoken: JWT authentication
+   * - sqlite3: Database
+   */
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
@@ -19,6 +43,14 @@
     "jsonwebtoken": "^9.0.2",
     "sqlite3": "^5.1.6"
   },
+  
+  /**
+   * Development Dependencies
+   * Tools used during development but not required in production
+   * 
+   * - concurrently: Run multiple commands simultaneously
+   * - nodemon: Auto-restart server on file changes
+   */
   "devDependencies": {
     "concurrently": "^8.2.1",
     "nodemon": "^3.0.1"
